@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,14 +13,19 @@ import {
   View,
 } from 'react-native';
 
+import { useTexteFluide } from '../hooks/useTexteFluide';
 import { discuter, ReponseInterrompue, sansReflexion, type MessageIA } from '../ia/client';
-import { manqueCle } from '../ia/fournisseurs';
-import { useReglagesIA } from '../ia/ReglagesContexte';
+import { FOURNISSEURS, manqueCle, type Espace } from '../ia/fournisseurs';
+import { choisirFichiers, choisirImages, prendrePhoto, type PieceJointe } from '../ia/pieces';
+import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 import { Markdown, type BlocCode } from './Markdown';
 
+export type Raccourci = { libelle: string; message: string };
+
 type Props = {
   couleurs: Couleurs;
+  espace: Espace;
   messages: MessageIA[];
   /** Appelé quand un échange est terminé (question + réponse). */
   onMessages: (messages: MessageIA[]) => void;
@@ -27,48 +34,87 @@ type Props = {
   accueil?: ReactNode;
   /** Suggestions affichées quand la discussion est vide. */
   suggestions?: string[];
+  /** Boutons rapides toujours visibles au-dessus de la zone d'écriture. */
+  raccourcis?: Raccourci[];
   onEnregistrerFichier?: (b: BlocCode) => void;
   fichiersExistants?: string[];
+  onOuvrirStudio?: (b: BlocCode) => void;
+  /** Codex : ajoute une option « Importer dans le projet » au bouton +. */
+  onImporterDansProjet?: (pieces: PieceJointe[]) => void;
   /** Action supplémentaire sous une réponse (ex. « Enregistrer tous les fichiers »). */
   actionReponse?: (texte: string) => ReactNode;
+  maxTokens?: number;
 };
+
+type Echange = { question: MessageIA; historique: MessageIA[] };
 
 export function Discussion({
   couleurs: c,
+  espace,
   messages,
   onMessages,
   systeme,
   placeholder = 'Écris ton message…',
   accueil,
   suggestions,
+  raccourcis,
   onEnregistrerFichier,
   fichiersExistants,
+  onOuvrirStudio,
+  onImporterDansProjet,
   actionReponse,
+  maxTokens,
 }: Props) {
-  const { connexion, ouvrirReglages } = useReglagesIA();
+  const { ouvrirReglages } = useReglagesIA();
+  const connexion = useConnexion(espace);
   const [saisie, setSaisie] = useState('');
-  const [enDirect, setEnDirect] = useState<string | null>(null);
-  const [question, setQuestion] = useState<string | null>(null);
+  const [pieces, setPieces] = useState<PieceJointe[]>([]);
+  const [echange, setEchange] = useState<Echange | null>(null);
+  const [recu, setRecu] = useState('');
+  const [final, setFinal] = useState<MessageIA[] | null>(null);
   const [erreur, setErreur] = useState('');
+  const [ajoutEnCours, setAjoutEnCours] = useState(false);
   const controleur = useRef<AbortController | null>(null);
   const defilement = useRef<ScrollView>(null);
+
+  const { affiche, aJour } = useTexteFluide(sansReflexion(recu), echange !== null);
   const cleManquante = manqueCle(connexion);
-  const occupe = question !== null;
+  const occupe = echange !== null;
 
   useEffect(() => () => controleur.current?.abort(), []);
 
+  // Quand la réponse est complète ET entièrement affichée, on l'enregistre.
+  useEffect(() => {
+    if (final && aJour) terminer(final);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [final, aJour]);
+
+  const terminer = (resultat: MessageIA[]) => {
+    onMessages(resultat);
+    setEchange(null);
+    setRecu('');
+    setFinal(null);
+  };
+
   const envoyer = async (texte = saisie) => {
     const contenu = texte.trim();
-    if (!contenu || occupe) return;
+    if ((!contenu && !pieces.length) || occupe) return;
     if (cleManquante) {
-      ouvrirReglages();
+      ouvrirReglages(espace);
       return;
     }
+    const question: MessageIA = {
+      role: 'user',
+      content: contenu || (pieces.some((p) => p.type === 'image') ? 'Décris et résume cette image.' : 'Résume ce fichier.'),
+      ...(pieces.length ? { pieces } : {}),
+    };
+    const historique = [...messages, question];
     setSaisie('');
+    setPieces([]);
     setErreur('');
-    setQuestion(contenu);
-    setEnDirect('');
-    const historique: MessageIA[] = [...messages, { role: 'user', content: contenu }];
+    setRecu('');
+    setFinal(null);
+    setEchange({ question, historique });
     const ctrl = new AbortController();
     controleur.current = ctrl;
     try {
@@ -76,18 +122,24 @@ export function Discussion({
         systeme,
         messages: historique,
         signal: ctrl.signal,
-        onMorceau: (t) => setEnDirect(t),
+        maxTokens,
+        onMorceau: (t) => setRecu(t),
       });
       const propre = sansReflexion(reponse).trim();
-      onMessages(propre ? [...historique, { role: 'assistant', content: propre }] : historique);
-      if (!propre && !ctrl.signal.aborted) setErreur("L'IA n'a rien répondu. Réessaie ou change de modèle.");
+      setRecu(reponse);
+      if (!propre && !ctrl.signal.aborted) {
+        setErreur("L'IA n'a rien répondu. Réessaie ou change de modèle.");
+        terminer(historique);
+      } else {
+        setFinal(propre ? [...historique, { role: 'assistant', content: propre }] : historique);
+      }
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') {
-        onMessages(historique);
+        terminer(historique);
       } else if (e instanceof ReponseInterrompue) {
         // On garde le début reçu, clairement marqué comme incomplet.
         const debut = sansReflexion(e.texte).trim();
-        onMessages(
+        terminer(
           debut
             ? [...historique, { role: 'assistant', content: `${debut}\n\n_(Réponse interrompue : la connexion a été coupée.)_` }]
             : historique,
@@ -95,18 +147,59 @@ export function Discussion({
         setErreur(e.message);
       } else {
         setErreur((e as Error).message);
-        setSaisie(contenu);
+        setSaisie(question.content === contenu ? contenu : '');
+        setPieces(question.pieces ?? []);
+        setEchange(null);
+        setRecu('');
       }
     } finally {
       controleur.current = null;
-      setQuestion(null);
-      setEnDirect(null);
     }
   };
 
-  const arreter = () => controleur.current?.abort();
+  const arreter = () => {
+    if (final) terminer(final); // réponse déjà reçue : on saute l'animation
+    else controleur.current?.abort();
+  };
+
+  const joindre = async (source: () => Promise<PieceJointe[]>, versProjet = false) => {
+    setAjoutEnCours(true);
+    setErreur('');
+    try {
+      const nouvelles = await source();
+      if (versProjet && onImporterDansProjet) {
+        const textes = nouvelles.filter((p) => p.type === 'texte');
+        if (textes.length) onImporterDansProjet(textes);
+        if (textes.length < nouvelles.length) setErreur('Seuls les fichiers texte ou code vont dans le projet.');
+      } else {
+        setPieces((prev) => [...prev, ...nouvelles].slice(0, 10));
+      }
+    } catch (e) {
+      setErreur((e as Error).message || "Impossible d'ajouter ce fichier.");
+    } finally {
+      setAjoutEnCours(false);
+    }
+  };
+
+  const menuPlus = () => {
+    const options = [
+      { text: '🖼️ Photo de la galerie', onPress: () => joindre(choisirImages) },
+      { text: '📷 Prendre une photo', onPress: () => joindre(prendrePhoto) },
+      { text: '📄 Fichier (texte, code, PDF)', onPress: () => joindre(choisirFichiers) },
+      ...(onImporterDansProjet
+        ? [{ text: '📁 Importer des fichiers dans le projet', onPress: () => joindre(choisirFichiers, true) }]
+        : []),
+      { text: 'Annuler', style: 'cancel' as const },
+    ];
+    if (Platform.OS === 'web') {
+      joindre(choisirFichiers);
+      return;
+    }
+    Alert.alert('Ajouter', "L'IA pourra voir, résumer et modifier ce que tu envoies.", options);
+  };
 
   const vide = messages.length === 0 && !occupe;
+  const fournisseur = FOURNISSEURS[connexion.fournisseur];
 
   return (
     <KeyboardAvoidingView
@@ -119,7 +212,7 @@ export function Discussion({
         style={styles.flex}
         contentContainerStyle={styles.fil}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => defilement.current?.scrollToEnd({ animated: true })}
+        onContentSizeChange={() => defilement.current?.scrollToEnd({ animated: false })}
       >
         {vide && (
           <View style={styles.accueil}>
@@ -146,14 +239,15 @@ export function Discussion({
             couleurs={c}
             onEnregistrerFichier={onEnregistrerFichier}
             fichiersExistants={fichiersExistants}
+            onOuvrirStudio={onOuvrirStudio}
             action={m.role === 'assistant' ? actionReponse?.(m.content) : null}
           />
         ))}
 
-        {question !== null && <Bulle message={{ role: 'user', content: question }} couleurs={c} />}
-        {enDirect !== null &&
-          (sansReflexion(enDirect) ? (
-            <Bulle message={{ role: 'assistant', content: sansReflexion(enDirect) }} couleurs={c} />
+        {echange && <Bulle message={echange.question} couleurs={c} />}
+        {echange &&
+          (affiche ? (
+            <Bulle message={{ role: 'assistant', content: affiche }} couleurs={c} />
           ) : (
             <View style={styles.reflexion}>
               <ActivityIndicator color={c.accentTexte} />
@@ -170,13 +264,68 @@ export function Discussion({
 
       <View style={[styles.composeur, { borderColor: c.bordure, backgroundColor: c.fond }]}>
         {cleManquante && (
-          <Pressable onPress={ouvrirReglages}>
+          <Pressable onPress={() => ouvrirReglages(espace)}>
             <Text style={[styles.avertissement, { color: c.danger }]}>
-              Ajoute une clé API dans les réglages (ou choisis Ollama) pour discuter →
+              Ajoute ta clé {fournisseur.nom} dans les réglages pour commencer →
             </Text>
           </Pressable>
         )}
+
+        {!!raccourcis?.length && !occupe && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.raccourcis}>
+            {raccourcis.map((r) => (
+              <Pressable
+                key={r.libelle}
+                onPress={() => envoyer(r.message)}
+                style={({ pressed }) => [styles.raccourci, { borderColor: c.accent, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={{ color: c.texte, fontWeight: '700', fontSize: 13 }}>{r.libelle}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
+        {pieces.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pieces}>
+            {pieces.map((p) => (
+              <View key={p.id} style={[styles.piece, { backgroundColor: c.carte, borderColor: c.bordure }]}>
+                {p.type === 'image' && p.uri ? (
+                  <Image source={{ uri: p.uri }} style={styles.miniature} />
+                ) : (
+                  <Text style={styles.iconePiece}>{p.type === 'pdf' ? '📕' : '📄'}</Text>
+                )}
+                <Text numberOfLines={1} style={[styles.nomPiece, { color: c.texte }]}>
+                  {p.nom}
+                </Text>
+                <Pressable
+                  onPress={() => setPieces((prev) => prev.filter((x) => x.id !== p.id))}
+                  hitSlop={8}
+                  accessibilityLabel={`Retirer ${p.nom}`}
+                >
+                  <Text style={{ color: c.danger, fontWeight: '800' }}>✕</Text>
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
         <View style={styles.ligneComposeur}>
+          <Pressable
+            onPress={menuPlus}
+            disabled={occupe || ajoutEnCours}
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter une image ou un fichier"
+            style={({ pressed }) => [
+              styles.plus,
+              { borderColor: c.accent, opacity: occupe ? 0.4 : pressed ? 0.7 : 1 },
+            ]}
+          >
+            {ajoutEnCours ? (
+              <ActivityIndicator color={c.accentTexte} />
+            ) : (
+              <Text style={[styles.textePlus, { color: c.accentTexte }]}>+</Text>
+            )}
+          </Pressable>
           <TextInput
             value={saisie}
             onChangeText={setSaisie}
@@ -198,12 +347,12 @@ export function Discussion({
           ) : (
             <Pressable
               onPress={() => envoyer()}
-              disabled={!saisie.trim()}
+              disabled={!saisie.trim() && !pieces.length}
               accessibilityRole="button"
               accessibilityLabel="Envoyer"
               style={({ pressed }) => [
                 styles.envoyer,
-                { backgroundColor: c.accent, opacity: !saisie.trim() ? 0.4 : pressed ? 0.8 : 1 },
+                { backgroundColor: c.accent, opacity: !saisie.trim() && !pieces.length ? 0.4 : pressed ? 0.8 : 1 },
               ]}
             >
               <Text style={[styles.fleche, { color: c.surAccent }]}>↑</Text>
@@ -220,20 +369,40 @@ function Bulle({
   couleurs: c,
   onEnregistrerFichier,
   fichiersExistants,
+  onOuvrirStudio,
   action,
 }: {
   message: MessageIA;
   couleurs: Couleurs;
   onEnregistrerFichier?: (b: BlocCode) => void;
   fichiersExistants?: string[];
+  onOuvrirStudio?: (b: BlocCode) => void;
   action?: ReactNode;
 }) {
   if (message.role === 'user') {
     return (
-      <View style={[styles.bulleUtilisateur, { backgroundColor: c.carte, borderColor: c.bordure }]}>
-        <Text selectable style={{ color: c.texte, fontSize: 16, lineHeight: 23 }}>
-          {message.content}
-        </Text>
+      <View style={styles.colonneUtilisateur}>
+        {!!message.pieces?.length && (
+          <View style={styles.piecesEnvoyees}>
+            {message.pieces.map((p) =>
+              p.type === 'image' && p.uri ? (
+                <Image key={p.id} source={{ uri: p.uri }} style={styles.imageEnvoyee} />
+              ) : (
+                <View key={p.id} style={[styles.piece, { backgroundColor: c.carte, borderColor: c.bordure }]}>
+                  <Text style={styles.iconePiece}>{p.type === 'pdf' ? '📕' : '📄'}</Text>
+                  <Text numberOfLines={1} style={[styles.nomPiece, { color: c.texte }]}>
+                    {p.nom}
+                  </Text>
+                </View>
+              ),
+            )}
+          </View>
+        )}
+        <View style={[styles.bulleUtilisateur, { backgroundColor: c.carte, borderColor: c.bordure }]}>
+          <Text selectable style={{ color: c.texte, fontSize: 16, lineHeight: 23 }}>
+            {message.content}
+          </Text>
+        </View>
       </View>
     );
   }
@@ -244,6 +413,7 @@ function Bulle({
         couleurs={c}
         onEnregistrerFichier={onEnregistrerFichier}
         fichiersExistants={fichiersExistants}
+        onOuvrirStudio={onOuvrirStudio}
       />
       {action}
     </View>
@@ -255,21 +425,40 @@ const styles = StyleSheet.create({
   fil: { padding: 16, gap: 18, flexGrow: 1 },
   accueil: { flex: 1, justifyContent: 'center', gap: 10, paddingVertical: 24 },
   suggestion: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14 },
+  colonneUtilisateur: { alignSelf: 'flex-end', maxWidth: '88%', alignItems: 'flex-end', gap: 6 },
   bulleUtilisateur: {
-    alignSelf: 'flex-end',
-    maxWidth: '88%',
     borderRadius: 18,
     borderBottomRightRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
+  piecesEnvoyees: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
+  imageEnvoyee: { width: 140, height: 140, borderRadius: 12 },
   bulleIA: { gap: 10 },
   reflexion: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   erreur: { borderWidth: 1, borderRadius: 12, padding: 12 },
   composeur: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, gap: 8 },
   avertissement: { fontSize: 14, fontWeight: '600' },
-  ligneComposeur: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  raccourcis: { gap: 8 },
+  raccourci: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  pieces: { gap: 8 },
+  piece: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: 220,
+  },
+  miniature: { width: 36, height: 36, borderRadius: 6 },
+  iconePiece: { fontSize: 20 },
+  nomPiece: { flexShrink: 1, fontSize: 13 },
+  ligneComposeur: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  plus: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  textePlus: { fontSize: 26, fontWeight: '700', marginTop: -2 },
   champ: {
     flex: 1,
     minHeight: 46,

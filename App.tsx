@@ -7,6 +7,7 @@ import { EcranChat } from './src/ecrans/EcranChat';
 import { EcranCodex } from './src/ecrans/EcranCodex';
 import { EcranReglages } from './src/ecrans/EcranReglages';
 import { EcranTaches } from './src/ecrans/EcranTaches';
+import type { Espace } from './src/ia/fournisseurs';
 import { ReglagesIAProvider } from './src/ia/ReglagesContexte';
 import { MenuLateral, MenuProvider, type Section } from './src/navigation/Menu';
 import { useCouleurs } from './src/theme';
@@ -18,13 +19,14 @@ export default function App() {
   // L'application s'ouvre toujours sur le Chat.
   const [ecran, setEcran] = useState<Ecran>('chat');
   const [menuOuvert, setMenuOuvert] = useState(false);
-  const [reglagesOuverts, setReglagesOuverts] = useState(false);
-  const ouvrirReglages = useCallback(() => setReglagesOuverts(true), []);
+  const [reglagesOuverts, setReglagesOuverts] = useState<Espace | null>(null);
+  const ouvrirReglages = useCallback((espace: Espace = 'chat') => setReglagesOuverts(espace), []);
   const ouvrirMenu = useCallback(() => setMenuOuvert(true), []);
 
   const choisir = (s: Section) => {
     setMenuOuvert(false);
-    if (s === 'parametres') setReglagesOuverts(true);
+    // Depuis le Codex, les Paramètres s'ouvrent sur l'IA du Codex.
+    if (s === 'parametres') setReglagesOuverts(ecran === 'codex' ? 'codex' : 'chat');
     else setEcran(s);
   };
 
@@ -52,7 +54,12 @@ export default function App() {
             onChoisir={choisir}
             onFermer={() => setMenuOuvert(false)}
           />
-          <EcranReglages visible={reglagesOuverts} couleurs={couleurs} onFermer={() => setReglagesOuverts(false)} />
+          <EcranReglages
+            visible={reglagesOuverts !== null}
+            espaceInitial={reglagesOuverts ?? 'chat'}
+            couleurs={couleurs}
+            onFermer={() => setReglagesOuverts(null)}
+          />
           <StatusBar style="auto" />
         </MenuProvider>
       </ReglagesIAProvider>

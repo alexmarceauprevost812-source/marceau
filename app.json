@@ -51,6 +51,13 @@
             "usesCleartextTraffic": true
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Marceau utilise tes photos pour les montrer à l'IA quand tu les ajoutes avec le bouton +.",
+          "cameraPermission": "Marceau utilise l'appareil photo pour montrer une photo à l'IA."
+        }
       ]
     ],
     "extra": {

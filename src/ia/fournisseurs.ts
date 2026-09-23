@@ -88,9 +88,15 @@ export const ORDRE_FOURNISSEURS: IdFournisseur[] = ['opencode', 'ollama', 'anthr
 /** Réglages d'un fournisseur. */
 export type ConfigFournisseur = { url: string; modele: string; cle: string };
 
+/** Chaque espace peut utiliser une IA différente (ex. Codex avec Claude). */
+export type Espace = 'chat' | 'codex';
+
 /** Réglages complets de l'IA. */
 export type ReglagesIA = {
+  /** IA du Chat et de l'assistant des tâches. */
   actif: IdFournisseur;
+  /** IA du Codex. */
+  actifCodex: IdFournisseur;
   configs: Record<IdFournisseur, ConfigFournisseur>;
 };
 
@@ -105,6 +111,7 @@ export function configParDefaut(id: IdFournisseur): ConfigFournisseur {
 export function reglagesParDefaut(): ReglagesIA {
   return {
     actif: 'opencode',
+    actifCodex: 'anthropic',
     configs: {
       opencode: configParDefaut('opencode'),
       ollama: configParDefaut('ollama'),
@@ -114,8 +121,9 @@ export function reglagesParDefaut(): ReglagesIA {
   };
 }
 
-export function connexionActive(r: ReglagesIA): Connexion {
-  return { fournisseur: r.actif, ...r.configs[r.actif] };
+export function connexionActive(r: ReglagesIA, espace: Espace = 'chat'): Connexion {
+  const id = espace === 'codex' ? r.actifCodex : r.actif;
+  return { fournisseur: id, ...r.configs[id] };
 }
 
 export function manqueCle(c: Connexion): boolean {

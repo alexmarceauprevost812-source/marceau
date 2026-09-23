@@ -9,6 +9,7 @@ import {
   ORDRE_FOURNISSEURS,
   reglagesParDefaut,
   type Connexion,
+  type Espace,
   type IdFournisseur,
   type ReglagesIA,
 } from './fournisseurs';
@@ -18,11 +19,14 @@ const cleSecrete = (id: IdFournisseur) => `marceau-ia-cle-${id}`;
 
 type Contexte = {
   reglages: ReglagesIA;
+  /** IA du Chat et des tâches. */
   connexion: Connexion;
+  /** IA du Codex. */
+  connexionCodex: Connexion;
   pret: boolean;
   enregistrer: (r: ReglagesIA) => Promise<void>;
   /** Ouvre l'écran des réglages (fourni par l'application). */
-  ouvrirReglages: () => void;
+  ouvrirReglages: (espace?: Espace) => void;
 };
 
 const ReglagesCtx = createContext<Contexte | null>(null);
@@ -33,7 +37,7 @@ export function ReglagesIAProvider({
   ouvrirReglages,
 }: {
   children: ReactNode;
-  ouvrirReglages: () => void;
+  ouvrirReglages: (espace?: Espace) => void;
 }) {
   const [reglages, setReglages] = useState<ReglagesIA>(reglagesParDefaut());
   const [pret, setPret] = useState(false);
@@ -46,6 +50,7 @@ export function ReglagesIAProvider({
         const lu = brut ? JSON.parse(brut) : {};
         const r: ReglagesIA = {
           actif: ORDRE_FOURNISSEURS.includes(lu.actif) ? lu.actif : defaut.actif,
+          actifCodex: ORDRE_FOURNISSEURS.includes(lu.actifCodex) ? lu.actifCodex : defaut.actifCodex,
           configs: { ...defaut.configs },
         };
         for (const id of ORDRE_FOURNISSEURS) {
@@ -65,6 +70,7 @@ export function ReglagesIAProvider({
     setReglages(r);
     const sansCles = {
       actif: r.actif,
+      actifCodex: r.actifCodex,
       configs: Object.fromEntries(
         ORDRE_FOURNISSEURS.map((id) => [id, { url: r.configs[id].url, modele: r.configs[id].modele }]),
       ),
@@ -78,11 +84,24 @@ export function ReglagesIAProvider({
   }, []);
 
   const valeur = useMemo(
-    () => ({ reglages, connexion: connexionActive(reglages), pret, enregistrer, ouvrirReglages }),
+    () => ({
+      reglages,
+      connexion: connexionActive(reglages, 'chat'),
+      connexionCodex: connexionActive(reglages, 'codex'),
+      pret,
+      enregistrer,
+      ouvrirReglages,
+    }),
     [reglages, pret, enregistrer, ouvrirReglages],
   );
 
   return <ReglagesCtx.Provider value={valeur}>{children}</ReglagesCtx.Provider>;
+}
+
+/** Connexion de l'espace demandé. */
+export function useConnexion(espace: Espace = 'chat'): Connexion {
+  const { connexion, connexionCodex } = useReglagesIA();
+  return espace === 'codex' ? connexionCodex : connexion;
 }
 
 export function useReglagesIA(): Contexte {

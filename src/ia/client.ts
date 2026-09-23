@@ -1,9 +1,10 @@
 import { fetch as fetchExpo } from 'expo/fetch';
 
-import { FOURNISSEURS, type Connexion } from './fournisseurs';
+import { FOURNISSEURS, type Connexion, type FormatAPI } from './fournisseurs';
+import { lireBase64, type PieceJointe } from './pieces';
 
 export type Role = 'user' | 'assistant';
-export type MessageIA = { role: Role; content: string };
+export type MessageIA = { role: Role; content: string; pieces?: PieceJointe[] };
 
 type OptionsDiscussion = {
   systeme?: string;
@@ -71,11 +72,57 @@ export class ReponseInterrompue extends Error {
   }
 }
 
+/** Texte d'un message, avec le contenu des fichiers texte joints. */
+export function texteAvecFichiers(m: MessageIA): string {
+  const textes = (m.pieces ?? []).filter((p) => p.type === 'texte');
+  if (!textes.length) return m.content;
+  const joints = textes.map((p) => `📎 Fichier joint « ${p.nom} » :\n\`\`\`\n${p.texte ?? ''}\n\`\`\``).join('\n\n');
+  return `${m.content}\n\n${joints}`.trim();
+}
+
+/** Convertit les messages au format de l'API (images et PDF en base64). */
+async function versAPI(messages: MessageIA[], format: FormatAPI): Promise<unknown[]> {
+  const resultat: unknown[] = [];
+  for (const m of messages) {
+    const texte = texteAvecFichiers(m);
+    const medias = (m.pieces ?? []).filter((p) => (p.type === 'image' || p.type === 'pdf') && p.uri);
+    if (m.role === 'assistant' || !medias.length) {
+      if (texte.trim()) resultat.push({ role: m.role, content: texte });
+      continue;
+    }
+    const blocs: unknown[] = [];
+    for (const p of medias) {
+      let donnees: string;
+      try {
+        donnees = await lireBase64(p.uri!);
+      } catch {
+        continue; // fichier supprimé du téléphone
+      }
+      if (format === 'anthropic') {
+        blocs.push(
+          p.type === 'image'
+            ? { type: 'image', source: { type: 'base64', media_type: p.mime, data: donnees } }
+            : { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: donnees }, title: p.nom },
+        );
+      } else {
+        blocs.push(
+          p.type === 'image'
+            ? { type: 'image_url', image_url: { url: `data:${p.mime};base64,${donnees}` } }
+            : { type: 'file', file: { filename: p.nom, file_data: `data:application/pdf;base64,${donnees}` } },
+        );
+      }
+    }
+    blocs.push({ type: 'text', text: texte.trim() || 'Regarde la pièce jointe.' });
+    resultat.push({ role: 'user', content: blocs });
+  }
+  return resultat;
+}
+
 /** Envoie une conversation à l'IA et renvoie la réponse complète (en direct si onMorceau est fourni). */
 export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<string> {
   const format = FOURNISSEURS[c.fournisseur].format;
   const enDirect = !!o.onMorceau;
-  const messages = o.messages.filter((m) => m.content.trim());
+  const messages = await versAPI(o.messages, format);
 
   let url: string;
   let corps: Record<string, unknown>;
@@ -88,7 +135,8 @@ export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<stri
       max_tokens: o.maxTokens ?? 16000,
       messages,
       stream: enDirect,
-      ...(o.systeme ? { system: o.systeme } : {}),
+      // Le contexte (ex. tout un projet) est mis en cache : moins cher et plus rapide ensuite
+      ...(o.systeme ? { system: [{ type: 'text', text: o.systeme, cache_control: { type: 'ephemeral' } }] } : {}),
     };
   } else {
     url = `${base(c)}/chat/completions`;
@@ -154,7 +202,7 @@ export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<stri
   return texte;
 }
 
-function morceauSSE(ligne: string, format: 'openai' | 'anthropic'): string {
+function morceauSSE(ligne: string, format: FormatAPI): string {
   const l = ligne.trim();
   if (!l.startsWith('data:')) return '';
   const donnees = l.slice(5).trim();
@@ -172,7 +220,7 @@ function morceauSSE(ligne: string, format: 'openai' | 'anthropic'): string {
   }
 }
 
-function texteDeReponse(brut: string, format: 'openai' | 'anthropic'): string {
+function texteDeReponse(brut: string, format: FormatAPI): string {
   try {
     const j = JSON.parse(brut);
     if (format === 'anthropic') {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -17,44 +18,82 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 
 import { nouvelId, usePersistant } from '../hooks/usePersistant';
+import { FOURNISSEURS } from '../ia/fournisseurs';
+import { importerDepot } from '../ia/github';
+import type { PieceJointe } from '../ia/pieces';
+import { useConnexion } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 import type { Fichier, Projet } from '../types';
-import { Discussion } from '../ui/Discussion';
+import { CodeColore } from '../ui/Coloration';
+import { Discussion, type Raccourci } from '../ui/Discussion';
 import { Entete, PuceIA } from '../ui/Entete';
 import { blocsAvecFichier, POLICE_CODE, type BlocCode } from '../ui/Markdown';
+import { assemblerHTML, pagePrincipale, Studio } from '../ui/Studio';
 
-const LIMITE_CONTEXTE = 40_000;
+/** Taille du projet envoyée à l'IA (Claude accepte beaucoup plus de contexte). */
+function limiteContexte(fournisseur: string) {
+  return fournisseur === 'anthropic' ? 400_000 : fournisseur === 'openai' ? 200_000 : 60_000;
+}
 
-function consigneCodex(p: Projet): string {
-  let fichiers = '';
+function consigneCodex(p: Projet, limite: number): string {
+  const arbre = p.fichiers.map((f) => `- ${f.chemin} (${f.contenu.split('\n').length} lignes)`).join('\n');
+  let contenus = '';
   let taille = 0;
+  const omis: string[] = [];
   for (const f of p.fichiers) {
     const bloc = `\n### ${f.chemin}\n\`\`\`\n${f.contenu}\n\`\`\`\n`;
-    if (taille + bloc.length > LIMITE_CONTEXTE) {
-      fichiers += `\n(${f.chemin} : trop long pour être inclus)`;
+    if (taille + bloc.length > limite) {
+      omis.push(f.chemin);
       continue;
     }
-    fichiers += bloc;
+    contenus += bloc;
     taille += bloc.length;
   }
   return [
-    'Tu es Codex, un assistant de programmation intégré à l’application Marceau. Tu aides à créer de vrais projets',
-    '(sites web, applis, scripts Python, etc.) pour une personne qui apprend : explique simplement, en français.',
+    'Tu es Codex, un ingénieur logiciel expert intégré à l’application Marceau. Tu aides une personne qui apprend',
+    'à créer, comprendre, corriger et améliorer de vrais projets (sites web, applis mobiles Expo/React Native,',
+    'scripts Python, etc.). Explique simplement, en français, mais code comme un professionnel.',
+    '',
+    'MÉTHODE :',
+    '- Lis attentivement TOUS les fichiers du projet ci-dessous avant de répondre.',
+    '- Pour un scan : explique ce que fait le projet, sa structure, les technologies, puis les problèmes trouvés',
+    '  (bugs, sécurité, performance) classés du plus important au moins important.',
+    '- Pour corriger : trouve la vraie cause, corrige-la, et n’invente pas de fichiers ou de fonctions qui n’existent pas.',
+    '- Si des images ou des fichiers sont joints au message, analyse-les (capture d’écran d’erreur, maquette, etc.).',
     '',
     'RÈGLE IMPORTANTE pour chaque fichier que tu crées ou modifies : donne le fichier COMPLET dans un bloc de code',
-    'dont la première ligne indique le langage PUIS le chemin, par exemple :',
+    'dont la première ligne indique le langage PUIS le chemin exact, par exemple :',
     '```html index.html',
     '```python src/main.py',
     'Ne donne jamais un fichier partiel avec « ... le reste ne change pas ». Un bloc par fichier.',
-    'Après le code, explique en quelques points ce que tu as fait et comment l’essayer.',
+    'Pour une page web, mets le CSS et le JavaScript dans des fichiers du projet (ou dans la page) : la personne',
+    'peut voir le résultat en direct dans le Studio.',
+    'Après le code, résume en quelques points ce que tu as changé et comment l’essayer.',
     '',
     `PROJET : ${p.nom}`,
     p.description ? `DESCRIPTION : ${p.description}` : '',
-    p.fichiers.length ? `FICHIERS ACTUELS DU PROJET :${fichiers}` : 'Le projet ne contient encore aucun fichier.',
+    p.fichiers.length ? `ARBORESCENCE (${p.fichiers.length} fichiers) :\n${arbre}` : 'Le projet ne contient encore aucun fichier.',
+    contenus ? `CONTENU DES FICHIERS :${contenus}` : '',
+    omis.length ? `(Fichiers trop longs pour être inclus : ${omis.join(', ')}. Demande-les si tu en as besoin.)` : '',
   ]
     .filter((l) => l !== '')
     .join('\n');
 }
+
+const RACCOURCIS: Raccourci[] = [
+  {
+    libelle: '🔍 Scanner le projet',
+    message:
+      'Scanne tout le projet : explique-moi ce qu’il fait, sa structure et les technologies utilisées, puis liste les problèmes que tu trouves (bugs, sécurité, performance), du plus important au moins important.',
+  },
+  {
+    libelle: '🐞 Corriger les bugs',
+    message: 'Trouve les bugs du projet et corrige-les. Donne les fichiers corrigés au complet.',
+  },
+  { libelle: '✨ Améliorer', message: 'Propose et fais les 3 améliorations les plus utiles pour ce projet.' },
+  { libelle: '📖 Expliquer', message: 'Explique-moi ce projet simplement, fichier par fichier, comme à un débutant.' },
+  { libelle: '📝 README', message: 'Écris ou mets à jour le fichier README.md du projet, en français.' },
+];
 
 export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
   const [projets, setProjets] = usePersistant<Projet[]>('marceau:projets', []);
@@ -66,13 +105,13 @@ export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
   const modifier = (id: string, f: (p: Projet) => Projet) =>
     setProjets((prev) => prev.map((p) => (p.id === id ? { ...f(p), majLe: Date.now() } : p)));
 
-  const creer = (nom: string, description: string) => {
+  const creer = (nom: string, description: string, fichiers: Fichier[] = []) => {
     const maintenant = Date.now();
     const p: Projet = {
       id: nouvelId(),
       nom: nom.trim(),
       description: description.trim(),
-      fichiers: [],
+      fichiers,
       messages: [],
       creeLe: maintenant,
       majLe: maintenant,
@@ -94,7 +133,12 @@ export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
 
   return (
     <View style={styles.flex}>
-      <Entete couleurs={c} titre="Codex" sousTitre="Écris du code et crée des projets avec l’IA" droite={<PuceIA couleurs={c} />} />
+      <Entete
+        couleurs={c}
+        titre="Codex"
+        sousTitre="Écris du code et crée des projets avec l’IA"
+        droite={<PuceIA couleurs={c} espace="codex" />}
+      />
       <View style={styles.marges}>
         <Pressable
           onPress={() => setCreation(true)}
@@ -151,7 +195,23 @@ function VueProjet({
 }) {
   const [onglet, setOnglet] = useState<'discussion' | 'fichiers'>('discussion');
   const [fichierOuvert, setFichierOuvert] = useState<string | null>(null);
+  const [studio, setStudio] = useState<{ html: string; titre: string } | null>(null);
+  const connexion = useConnexion('codex');
   const chemins = p.fichiers.map((f) => f.chemin);
+  const page = pagePrincipale(p.fichiers);
+
+  const ouvrirStudio = (b?: BlocCode) => {
+    if (b) {
+      // Le bloc de la réponse + les fichiers du projet (CSS, JS) qu'il utilise
+      const chemin = b.chemin || 'index.html';
+      setStudio({ html: assemblerHTML(b.code, chemin, p.fichiers), titre: chemin });
+    } else if (page) {
+      setStudio({ html: assemblerHTML(page.contenu, page.chemin, p.fichiers), titre: page.chemin });
+    }
+  };
+
+  const importer = (pieces: PieceJointe[]) =>
+    enregistrer(pieces.map((x) => ({ langage: '', chemin: x.nom, code: x.texte ?? '', complet: true })));
 
   const enregistrer = (blocs: BlocCode[]) =>
     onModifier((proj) => {
@@ -175,7 +235,27 @@ function VueProjet({
 
   return (
     <View style={styles.flex}>
-      <Entete couleurs={c} titre={p.nom} sousTitre="Projet Codex" onRetour={onRetour} droite={<PuceIA couleurs={c} />} />
+      <Entete
+        couleurs={c}
+        titre={p.nom}
+        sousTitre={`Projet Codex · ${p.fichiers.length} fichier${p.fichiers.length > 1 ? 's' : ''}`}
+        onRetour={onRetour}
+        droite={
+          <View style={styles.enteteDroite}>
+            {page && (
+              <Pressable
+                onPress={() => ouvrirStudio()}
+                accessibilityRole="button"
+                accessibilityLabel="Ouvrir le Studio"
+                style={({ pressed }) => [styles.boutonStudio, { backgroundColor: c.accent, opacity: pressed ? 0.8 : 1 }]}
+              >
+                <Text style={{ color: c.surAccent, fontWeight: '800', fontSize: 13 }}>▶ Studio</Text>
+              </Pressable>
+            )}
+            <PuceIA couleurs={c} espace="codex" />
+          </View>
+        }
+      />
       <View style={[styles.segments, { borderColor: c.bordure }]}>
         {(['discussion', 'fichiers'] as const).map((o) => {
           const actif = onglet === o;
@@ -198,21 +278,34 @@ function VueProjet({
       {onglet === 'discussion' ? (
         <Discussion
           couleurs={c}
+          espace="codex"
           messages={p.messages}
-          systeme={consigneCodex(p)}
+          systeme={consigneCodex(p, limiteContexte(connexion.fournisseur))}
+          maxTokens={connexion.fournisseur === 'anthropic' ? 32000 : undefined}
+          raccourcis={p.fichiers.length ? RACCOURCIS : undefined}
+          onOuvrirStudio={ouvrirStudio}
+          onImporterDansProjet={importer}
           placeholder="Décris ce que tu veux coder…"
           onMessages={(messages) => onModifier((proj) => ({ ...proj, messages }))}
           onEnregistrerFichier={(b) => enregistrer([b])}
           fichiersExistants={chemins}
-          suggestions={[
+          suggestions={p.fichiers.length ? [] : [
             'Crée une page web simple avec un bouton orange',
             'Écris un script Python qui renomme des photos par date',
             'Explique-moi la structure de ce projet',
           ]}
           accueil={
-            <Text style={[styles.accueil, { color: c.texte }]}>
-              Décris ton idée : Codex écrit les fichiers, tu les enregistres dans le projet.
-            </Text>
+            <View style={{ gap: 6, marginBottom: 6 }}>
+              <Text style={[styles.accueil, { color: c.texte }]}>
+                {p.fichiers.length
+                  ? `Codex connaît les ${p.fichiers.length} fichiers de ce projet. Demande un scan, une correction ou une nouvelle fonction.`
+                  : 'Décris ton idée : Codex écrit les fichiers, tu les enregistres dans le projet.'}
+              </Text>
+              <Text style={{ color: c.texteDoux, fontSize: 14 }}>
+                IA : {FOURNISSEURS[connexion.fournisseur].nom} · {connexion.modele}. Le bouton + envoie des images
+                (ex. une capture d’erreur) ou des fichiers.
+              </Text>
+            </View>
           }
           actionReponse={(texte) => {
             const blocs = blocsAvecFichier(texte);
@@ -276,7 +369,16 @@ function VueProjet({
           onModifier((proj) => ({ ...proj, fichiers: proj.fichiers.filter((f) => f.chemin !== fichierOuvert) }));
           setFichierOuvert(null);
         }}
+        onStudio={
+          fichier && /\.html?$/i.test(fichier.chemin)
+            ? () => {
+                setFichierOuvert(null);
+                setStudio({ html: assemblerHTML(fichier.contenu, fichier.chemin, p.fichiers), titre: fichier.chemin });
+              }
+            : undefined
+        }
       />
+      <Studio html={studio?.html ?? null} titre={studio?.titre ?? ''} couleurs={c} onFermer={() => setStudio(null)} />
     </View>
   );
 }
@@ -287,12 +389,14 @@ function VueFichier({
   onFermer,
   onSauver,
   onSupprimer,
+  onStudio,
 }: {
   fichier: Fichier | null;
   couleurs: Couleurs;
   onFermer: () => void;
   onSauver: (contenu: string) => void;
   onSupprimer: () => void;
+  onStudio?: () => void;
 }) {
   const [edition, setEdition] = useState<string | null>(null);
   const [copie, setCopie] = useState(false);
@@ -332,8 +436,8 @@ function VueFichier({
           {edition === null ? (
             <ScrollView style={styles.flex} contentContainerStyle={styles.marges}>
               <ScrollView horizontal>
-                <Text selectable style={[styles.code, { color: c.texte }]}>
-                  {fichier.contenu}
+                <Text selectable style={[styles.code, { color: c.code.texte }]}>
+                  <CodeColore code={fichier.contenu} langage="" chemin={fichier.chemin} couleurs={c} />
                 </Text>
               </ScrollView>
             </ScrollView>
@@ -350,6 +454,11 @@ function VueFichier({
           )}
 
           <View style={[styles.actions, { borderColor: c.bordure }]}>
+            {onStudio && (
+              <Pressable onPress={onStudio} style={[styles.boutonAction, { backgroundColor: c.accent }]}>
+                <Text style={[styles.texteBouton, { color: c.surAccent }]}>▶ Studio</Text>
+              </Pressable>
+            )}
             <Pressable
               onPress={async () => {
                 await Clipboard.setStringAsync(fichier.contenu);
@@ -393,18 +502,47 @@ function NouveauProjet({
   visible: boolean;
   couleurs: Couleurs;
   onFermer: () => void;
-  onCreer: (nom: string, description: string) => void;
+  onCreer: (nom: string, description: string, fichiers?: Fichier[]) => void;
 }) {
+  const [mode, setMode] = useState<'vide' | 'github'>('vide');
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
+  const [adresse, setAdresse] = useState('');
+  const [jeton, setJeton] = useState('');
+  const [progres, setProgres] = useState<string | null>(null);
+  const [erreur, setErreur] = useState('');
   const champ = [styles.champ, { backgroundColor: c.carte, borderColor: c.bordure, color: c.texte }];
 
-  const creer = () => {
-    if (!nom.trim()) return;
-    onCreer(nom, description);
+  const reinitialiser = () => {
     setNom('');
     setDescription('');
+    setAdresse('');
+    setJeton('');
+    setErreur('');
+    setProgres(null);
   };
+
+  const creer = async () => {
+    setErreur('');
+    if (mode === 'vide') {
+      if (!nom.trim()) return;
+      onCreer(nom, description);
+      reinitialiser();
+      return;
+    }
+    if (!adresse.trim() || progres) return;
+    setProgres('Lecture du dépôt…');
+    try {
+      const r = await importerDepot(adresse, jeton, (fait, total) => setProgres(`Téléchargement ${fait} / ${total} fichiers…`));
+      onCreer(nom.trim() || r.nom, r.description, r.fichiers);
+      reinitialiser();
+    } catch (e) {
+      setErreur((e as Error).message);
+      setProgres(null);
+    }
+  };
+
+  const pret = mode === 'vide' ? !!nom.trim() : !!adresse.trim() && !progres;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onFermer}>
@@ -416,33 +554,97 @@ function NouveauProjet({
           <Text style={[styles.titreBarre, { color: c.texte }]}>Nouveau projet</Text>
           <View style={{ width: 60 }} />
         </View>
-        <View style={[styles.marges, { gap: 10 }]}>
-          <Text style={[styles.etiquette, { color: c.texteDoux }]}>NOM</Text>
+        <ScrollView contentContainerStyle={[styles.marges, { gap: 10 }]} keyboardShouldPersistTaps="handled">
+          <View style={[styles.segments, { borderColor: c.bordure, marginHorizontal: 0 }]}>
+            {(['vide', 'github'] as const).map((m) => {
+              const actif = mode === m;
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => setMode(m)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: actif }}
+                  style={[styles.segment, actif && { backgroundColor: c.accent }]}
+                >
+                  <Text style={{ color: actif ? c.surAccent : c.texte, fontWeight: '700' }}>
+                    {m === 'vide' ? 'Projet vide' : 'Importer de GitHub'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {mode === 'github' && (
+            <>
+              <Text style={[styles.etiquette, { color: c.texteDoux }]}>ADRESSE DU DÉPÔT GITHUB</Text>
+              <TextInput
+                value={adresse}
+                onChangeText={setAdresse}
+                placeholder="github.com/proprio/depot"
+                placeholderTextColor={c.texteDoux}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={champ}
+              />
+              <Text style={{ color: c.texteDoux, fontSize: 13, lineHeight: 19 }}>
+                Une branche précise : github.com/proprio/depot/tree/nom-de-branche. Codex lit tous les fichiers texte et
+                code (jusqu’à 200 fichiers) pour comprendre le projet.
+              </Text>
+              <Text style={[styles.etiquette, { color: c.texteDoux }]}>JETON GITHUB (DÉPÔT PRIVÉ, FACULTATIF)</Text>
+              <TextInput
+                value={jeton}
+                onChangeText={setJeton}
+                placeholder="ghp_…"
+                placeholderTextColor={c.texteDoux}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+                style={champ}
+              />
+            </>
+          )}
+
+          <Text style={[styles.etiquette, { color: c.texteDoux }]}>NOM{mode === 'github' ? ' (FACULTATIF)' : ''}</Text>
           <TextInput
             value={nom}
             onChangeText={setNom}
-            placeholder="Ex. : Site de ti-lex"
+            placeholder={mode === 'github' ? 'Nom du dépôt par défaut' : 'Ex. : Site de ti-lex'}
             placeholderTextColor={c.texteDoux}
             style={champ}
-            autoFocus
           />
-          <Text style={[styles.etiquette, { color: c.texteDoux }]}>DESCRIPTION (FACULTATIF)</Text>
-          <TextInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Langage, but du projet…"
-            placeholderTextColor={c.texteDoux}
-            multiline
-            style={[...champ, { minHeight: 90, paddingTop: 12, textAlignVertical: 'top' }]}
-          />
+          {mode === 'vide' && (
+            <>
+              <Text style={[styles.etiquette, { color: c.texteDoux }]}>DESCRIPTION (FACULTATIF)</Text>
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Langage, but du projet…"
+                placeholderTextColor={c.texteDoux}
+                multiline
+                style={[...champ, { minHeight: 90, paddingTop: 12, textAlignVertical: 'top' }]}
+              />
+            </>
+          )}
+
+          {!!erreur && <Text style={{ color: c.danger, fontSize: 14, lineHeight: 20 }}>{erreur}</Text>}
+          {!!progres && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <ActivityIndicator color={c.accentTexte} />
+              <Text style={{ color: c.texte }}>{progres}</Text>
+            </View>
+          )}
+
           <Pressable
             onPress={creer}
-            disabled={!nom.trim()}
-            style={[styles.bouton, { backgroundColor: c.accent, opacity: nom.trim() ? 1 : 0.4, marginTop: 10 }]}
+            disabled={!pret}
+            style={[styles.bouton, { backgroundColor: c.accent, opacity: pret ? 1 : 0.4, marginTop: 10 }]}
           >
-            <Text style={[styles.texteBouton, { color: c.surAccent }]}>Créer le projet</Text>
+            <Text style={[styles.texteBouton, { color: c.surAccent }]}>
+              {mode === 'vide' ? 'Créer le projet' : 'Importer le projet'}
+            </Text>
           </Pressable>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </Modal>
   );
@@ -450,6 +652,8 @@ function NouveauProjet({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  enteteDroite: { alignItems: 'flex-end', gap: 6 },
+  boutonStudio: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   marges: { paddingHorizontal: 20, paddingBottom: 14 },
   accueil: { fontSize: 18, fontWeight: '700', lineHeight: 25, marginBottom: 6 },
   bouton: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

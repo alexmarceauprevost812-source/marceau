@@ -14,8 +14,10 @@ construite avec [Expo](https://expo.dev) et React Native.
 - Thème automatique : jour gris mat avec écriture noire, nuit noire avec écriture blanche, boutons orange
 - Interface en français, accessible (lecteurs d'écran)
 - **Assistant IA gratuit** : décris un objectif, l'IA le découpe en tâches
-- **Chat** : jase avec des IA en 3 modes (Discussion, Écriture, Sujet), réponses en direct, discussions sauvegardées
-- **Codex** : crée des projets de code avec l'IA — les fichiers proposés s'enregistrent dans le projet, se modifient, se copient et se partagent
+- **Chat** : jase avec des IA en 3 modes (Discussion, Écriture, Sujet), écriture fluide en direct, discussions sauvegardées
+- **Bouton +** (Chat et Codex) : envoie des photos, des captures, des PDF ou des fichiers texte/code ; l'IA les voit, les résume et les modifie
+- **Studio** : les pages HTML créées par l'IA s'affichent en direct dans l'appli (▶ Studio)
+- **Codex** : projets de code avec coloration syntaxique ; importe un dépôt GitHub, scanne tout le projet, corrige les bugs ; fonctionne avec ta clé Claude (Anthropic) par défaut
 
 ## Assistant IA
 
@@ -29,6 +31,10 @@ L'application s'ouvre sur le **Chat**. Le menu **☰** en haut à gauche mène a
 | [OpenAI (Codex)](https://platform.openai.com) | Payant à l'usage | Votre clé API OpenAI | En ligne |
 
 Le bouton « Charger la liste des modèles du serveur » affiche les modèles disponibles à jour.
+Le Chat et le Codex ont chacun leur IA : par défaut OpenCode Zen (gratuit) pour le Chat et Claude pour le Codex.
+Avec Claude, le contexte du projet est mis en cache (moins cher quand on pose plusieurs questions).
+
+La vision (images) et les PDF dépendent du modèle : Claude et GPT les lisent ; beaucoup de modèles gratuits ne lisent que le texte.
 
 Pour Ollama : lancez `OLLAMA_HOST=0.0.0.0 ollama serve`, téléchargez un modèle
 (`ollama pull llama3.2`) et mettez l'adresse IP de l'ordinateur dans les réglages
@@ -86,6 +92,10 @@ src/ecrans/                   Écrans : Tâches, Chat, Codex, Réglages IA
 src/components/AssistantIA    Assistant IA des tâches
 src/ui/Discussion.tsx         Fil de discussion avec réponses en direct
 src/ui/Markdown.tsx           Affichage du Markdown et des blocs de code
+src/ui/Coloration.tsx         Coloration syntaxique du code
+src/ui/Studio.tsx             Aperçu en direct des pages HTML
+src/ia/pieces.ts              Photos et fichiers joints (bouton +)
+src/ia/github.ts              Import d'un dépôt GitHub dans le Codex
 src/ia/                       Fournisseurs d'IA, réglages, appels (OpenAI et Anthropic)
 src/hooks/useTaches.ts        État des tâches + sauvegarde (AsyncStorage)
 src/theme.ts                  Couleurs clair / sombre
