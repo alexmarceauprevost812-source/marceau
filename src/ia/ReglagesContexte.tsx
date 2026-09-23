@@ -2,25 +2,32 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
+import { sauvegarder } from '../hooks/usePersistant';
+
 import {
   connexionActive,
   ORDRE_FOURNISSEURS,
   reglagesParDefaut,
   type Connexion,
+  type Espace,
   type IdFournisseur,
   type ReglagesIA,
 } from './fournisseurs';
 
 const CLE_REGLAGES = 'marceau:ia';
 const cleSecrete = (id: IdFournisseur) => `marceau-ia-cle-${id}`;
+const CLE_GITHUB = 'marceau-github-jeton';
 
 type Contexte = {
   reglages: ReglagesIA;
+  /** IA du Chat et des tâches. */
   connexion: Connexion;
+  /** IA du Codex. */
+  connexionCodex: Connexion;
   pret: boolean;
   enregistrer: (r: ReglagesIA) => Promise<void>;
   /** Ouvre l'écran des réglages (fourni par l'application). */
-  ouvrirReglages: () => void;
+  ouvrirReglages: (espace?: Espace) => void;
 };
 
 const ReglagesCtx = createContext<Contexte | null>(null);
@@ -31,7 +38,7 @@ export function ReglagesIAProvider({
   ouvrirReglages,
 }: {
   children: ReactNode;
-  ouvrirReglages: () => void;
+  ouvrirReglages: (espace?: Espace) => void;
 }) {
   const [reglages, setReglages] = useState<ReglagesIA>(reglagesParDefaut());
   const [pret, setPret] = useState(false);
@@ -44,7 +51,9 @@ export function ReglagesIAProvider({
         const lu = brut ? JSON.parse(brut) : {};
         const r: ReglagesIA = {
           actif: ORDRE_FOURNISSEURS.includes(lu.actif) ? lu.actif : defaut.actif,
+          actifCodex: ORDRE_FOURNISSEURS.includes(lu.actifCodex) ? lu.actifCodex : defaut.actifCodex,
           configs: { ...defaut.configs },
+          jetonGithub: (await SecureStore.getItemAsync(CLE_GITHUB).catch(() => null)) ?? '',
         };
         for (const id of ORDRE_FOURNISSEURS) {
           const cle = (await SecureStore.getItemAsync(cleSecrete(id)).catch(() => null)) ?? '';
@@ -63,11 +72,14 @@ export function ReglagesIAProvider({
     setReglages(r);
     const sansCles = {
       actif: r.actif,
+      actifCodex: r.actifCodex,
       configs: Object.fromEntries(
         ORDRE_FOURNISSEURS.map((id) => [id, { url: r.configs[id].url, modele: r.configs[id].modele }]),
       ),
     };
-    await AsyncStorage.setItem(CLE_REGLAGES, JSON.stringify(sansCles)).catch(() => {});
+    await sauvegarder(CLE_REGLAGES, sansCles);
+    if (r.jetonGithub.trim()) await SecureStore.setItemAsync(CLE_GITHUB, r.jetonGithub.trim()).catch(() => {});
+    else await SecureStore.deleteItemAsync(CLE_GITHUB).catch(() => {});
     for (const id of ORDRE_FOURNISSEURS) {
       const cle = r.configs[id].cle.trim();
       if (cle) await SecureStore.setItemAsync(cleSecrete(id), cle).catch(() => {});
@@ -76,11 +88,24 @@ export function ReglagesIAProvider({
   }, []);
 
   const valeur = useMemo(
-    () => ({ reglages, connexion: connexionActive(reglages), pret, enregistrer, ouvrirReglages }),
+    () => ({
+      reglages,
+      connexion: connexionActive(reglages, 'chat'),
+      connexionCodex: connexionActive(reglages, 'codex'),
+      pret,
+      enregistrer,
+      ouvrirReglages,
+    }),
     [reglages, pret, enregistrer, ouvrirReglages],
   );
 
   return <ReglagesCtx.Provider value={valeur}>{children}</ReglagesCtx.Provider>;
+}
+
+/** Connexion de l'espace demandé. */
+export function useConnexion(espace: Espace = 'chat'): Connexion {
+  const { connexion, connexionCodex } = useReglagesIA();
+  return espace === 'codex' ? connexionCodex : connexion;
 }
 
 export function useReglagesIA(): Contexte {

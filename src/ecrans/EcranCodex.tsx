@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -14,47 +13,85 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Clipboard from 'expo-clipboard';
 
 import { nouvelId, usePersistant } from '../hooks/usePersistant';
+import { FOURNISSEURS } from '../ia/fournisseurs';
+import { changementsDuProjet, importerDepot, listerDepots, type Depot } from '../ia/github';
+import { supprimerPieces, type PieceJointe } from '../ia/pieces';
+import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
-import type { Fichier, Projet } from '../types';
-import { Discussion } from '../ui/Discussion';
+import type { Fichier, LienGithub, Projet } from '../types';
+import { Discussion, type Raccourci } from '../ui/Discussion';
 import { Entete, PuceIA } from '../ui/Entete';
+import { Explorateur } from '../ui/Explorateur';
 import { blocsAvecFichier, POLICE_CODE, type BlocCode } from '../ui/Markdown';
+import { assemblerHTML, pagePrincipale, Studio } from '../ui/Studio';
+import { EnvoiGithub } from './EnvoiGithub';
 
-const LIMITE_CONTEXTE = 40_000;
+/** Taille du projet envoyée à l'IA (Claude accepte beaucoup plus de contexte). */
+function limiteContexte(fournisseur: string) {
+  return fournisseur === 'anthropic' ? 400_000 : fournisseur === 'openai' ? 200_000 : 60_000;
+}
 
-function consigneCodex(p: Projet): string {
-  let fichiers = '';
+function consigneCodex(p: Projet, limite: number): string {
+  const arbre = p.fichiers.map((f) => `- ${f.chemin} (${f.contenu.split('\n').length} lignes)`).join('\n');
+  let contenus = '';
   let taille = 0;
+  const omis: string[] = [];
   for (const f of p.fichiers) {
     const bloc = `\n### ${f.chemin}\n\`\`\`\n${f.contenu}\n\`\`\`\n`;
-    if (taille + bloc.length > LIMITE_CONTEXTE) {
-      fichiers += `\n(${f.chemin} : trop long pour être inclus)`;
+    if (taille + bloc.length > limite) {
+      omis.push(f.chemin);
       continue;
     }
-    fichiers += bloc;
+    contenus += bloc;
     taille += bloc.length;
   }
   return [
-    'Tu es Codex, un assistant de programmation intégré à l’application Marceau. Tu aides à créer de vrais projets',
-    '(sites web, applis, scripts Python, etc.) pour une personne qui apprend : explique simplement, en français.',
+    'Tu es Codex, un ingénieur logiciel expert intégré à l’application Marceau. Tu aides une personne qui apprend',
+    'à créer, comprendre, corriger et améliorer de vrais projets (sites web, applis mobiles Expo/React Native,',
+    'scripts Python, etc.). Explique simplement, en français, mais code comme un professionnel.',
+    '',
+    'MÉTHODE :',
+    '- Lis attentivement TOUS les fichiers du projet ci-dessous avant de répondre.',
+    '- Pour un scan : explique ce que fait le projet, sa structure, les technologies, puis les problèmes trouvés',
+    '  (bugs, sécurité, performance) classés du plus important au moins important.',
+    '- Pour corriger : trouve la vraie cause, corrige-la, et n’invente pas de fichiers ou de fonctions qui n’existent pas.',
+    '- Si des images ou des fichiers sont joints au message, analyse-les (capture d’écran d’erreur, maquette, etc.).',
     '',
     'RÈGLE IMPORTANTE pour chaque fichier que tu crées ou modifies : donne le fichier COMPLET dans un bloc de code',
-    'dont la première ligne indique le langage PUIS le chemin, par exemple :',
+    'dont la première ligne indique le langage PUIS le chemin exact, par exemple :',
     '```html index.html',
     '```python src/main.py',
     'Ne donne jamais un fichier partiel avec « ... le reste ne change pas ». Un bloc par fichier.',
-    'Après le code, explique en quelques points ce que tu as fait et comment l’essayer.',
+    'Pour une page web, mets le CSS et le JavaScript dans des fichiers du projet (ou dans la page) : la personne',
+    'peut voir le résultat en direct dans le Studio.',
+    'Après le code, résume en quelques points ce que tu as changé et comment l’essayer.',
     '',
     `PROJET : ${p.nom}`,
     p.description ? `DESCRIPTION : ${p.description}` : '',
-    p.fichiers.length ? `FICHIERS ACTUELS DU PROJET :${fichiers}` : 'Le projet ne contient encore aucun fichier.',
+    p.fichiers.length ? `ARBORESCENCE (${p.fichiers.length} fichiers) :\n${arbre}` : 'Le projet ne contient encore aucun fichier.',
+    contenus ? `CONTENU DES FICHIERS :${contenus}` : '',
+    omis.length ? `(Fichiers trop longs pour être inclus : ${omis.join(', ')}. Demande-les si tu en as besoin.)` : '',
   ]
     .filter((l) => l !== '')
     .join('\n');
 }
+
+const RACCOURCIS: Raccourci[] = [
+  {
+    libelle: '🔍 Scanner le projet',
+    message:
+      'Scanne tout le projet : explique-moi ce qu’il fait, sa structure et les technologies utilisées, puis liste les problèmes que tu trouves (bugs, sécurité, performance), du plus important au moins important.',
+  },
+  {
+    libelle: '🐞 Corriger les bugs',
+    message: 'Trouve les bugs du projet et corrige-les. Donne les fichiers corrigés au complet.',
+  },
+  { libelle: '✨ Améliorer', message: 'Propose et fais les 3 améliorations les plus utiles pour ce projet.' },
+  { libelle: '📖 Expliquer', message: 'Explique-moi ce projet simplement, fichier par fichier, comme à un débutant.' },
+  { libelle: '📝 README', message: 'Écris ou mets à jour le fichier README.md du projet, en français.' },
+];
 
 export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
   const [projets, setProjets] = usePersistant<Projet[]>('marceau:projets', []);
@@ -66,14 +103,15 @@ export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
   const modifier = (id: string, f: (p: Projet) => Projet) =>
     setProjets((prev) => prev.map((p) => (p.id === id ? { ...f(p), majLe: Date.now() } : p)));
 
-  const creer = (nom: string, description: string) => {
+  const creer = (nom: string, description: string, fichiers: Fichier[] = [], github?: LienGithub) => {
     const maintenant = Date.now();
     const p: Projet = {
       id: nouvelId(),
       nom: nom.trim(),
       description: description.trim(),
-      fichiers: [],
+      fichiers,
       messages: [],
+      ...(github ? { github } : {}),
       creeLe: maintenant,
       majLe: maintenant,
     };
@@ -85,7 +123,15 @@ export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
   const supprimer = (p: Projet) =>
     Alert.alert('Supprimer le projet ?', `« ${p.nom} » et ses ${p.fichiers.length} fichiers seront effacés.`, [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => setProjets((prev) => prev.filter((x) => x.id !== p.id)) },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: () => {
+          // Les photos et PDF joints sont copiés sur le téléphone : on les efface aussi.
+          supprimerPieces(p.messages.flatMap((m) => m.pieces ?? []));
+          setProjets((prev) => prev.filter((x) => x.id !== p.id));
+        },
+      },
     ]);
 
   if (courant) {
@@ -94,7 +140,12 @@ export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
 
   return (
     <View style={styles.flex}>
-      <Entete couleurs={c} titre="Codex" sousTitre="Écris du code et crée des projets avec l’IA" droite={<PuceIA couleurs={c} />} />
+      <Entete
+        couleurs={c}
+        titre="Codex"
+        sousTitre="Écris du code et crée des projets avec l’IA"
+        droite={<PuceIA couleurs={c} espace="codex" />}
+      />
       <View style={styles.marges}>
         <Pressable
           onPress={() => setCreation(true)}
@@ -149,35 +200,134 @@ function VueProjet({
   onRetour: () => void;
   onModifier: (f: (p: Projet) => Projet) => void;
 }) {
-  const [onglet, setOnglet] = useState<'discussion' | 'fichiers'>('discussion');
-  const [fichierOuvert, setFichierOuvert] = useState<string | null>(null);
-  const chemins = p.fichiers.map((f) => f.chemin);
+  const [onglet, setOnglet] = useState<'discussion' | 'code'>('discussion');
+  const [studio, setStudio] = useState<{ html: string; titre: string } | null>(null);
+  const [envoi, setEnvoi] = useState(false);
+  const [maj, setMaj] = useState<string | null>(null);
+  const connexion = useConnexion('codex');
+  const { reglages, ouvrirReglages } = useReglagesIA();
+  const contenus = useMemo(() => Object.fromEntries(p.fichiers.map((f) => [f.chemin, f.contenu])), [p.fichiers]);
+  const changements = useMemo(() => (p.github ? changementsDuProjet(p) : []), [p]);
+  const page = pagePrincipale(p.fichiers);
 
-  const enregistrer = (blocs: BlocCode[]) =>
+  const ouvrirStudio = (b?: BlocCode) => {
+    if (b) {
+      // Le bloc de la réponse + les fichiers du projet (CSS, JS) qu'il utilise
+      const chemin = b.chemin || 'index.html';
+      setStudio({ html: assemblerHTML(b.code, chemin, p.fichiers), titre: chemin });
+    } else if (page) {
+      setStudio({ html: assemblerHTML(page.contenu, page.chemin, p.fichiers), titre: page.chemin });
+    }
+  };
+
+  /** Crée ou remplace des fichiers (en gardant leur version GitHub d'origine pour voir les changements). */
+  const enregistrer = (blocs: { chemin: string; code: string }[]) =>
     onModifier((proj) => {
       const fichiers = [...proj.fichiers];
       for (const b of blocs) {
         const i = fichiers.findIndex((f) => f.chemin === b.chemin);
-        const nouveau: Fichier = { chemin: b.chemin, contenu: b.code, majLe: Date.now() };
-        if (i >= 0) fichiers[i] = nouveau;
-        else fichiers.push(nouveau);
+        if (i >= 0) fichiers[i] = { ...fichiers[i], contenu: b.code, majLe: Date.now() };
+        else fichiers.push({ chemin: b.chemin, contenu: b.code, majLe: Date.now() });
       }
-      fichiers.sort((a, b) => a.chemin.localeCompare(b.chemin));
+      fichiers.sort((x, y) => x.chemin.localeCompare(y.chemin));
       return { ...proj, fichiers };
     });
+
+  const supprimer = (chemin: string) =>
+    onModifier((proj) => {
+      const f = proj.fichiers.find((x) => x.chemin === chemin);
+      const supprimes = f?.origine !== undefined ? [...new Set([...(proj.supprimes ?? []), chemin])] : proj.supprimes;
+      return { ...proj, supprimes, fichiers: proj.fichiers.filter((x) => x.chemin !== chemin) };
+    });
+
+  const importer = (pieces: PieceJointe[]) => enregistrer(pieces.map((x) => ({ chemin: x.nom, code: x.texte ?? '' })));
 
   const exporter = () => {
     const texte = p.fichiers.map((f) => `===== ${f.chemin} =====\n${f.contenu}`).join('\n\n');
     Share.share({ title: p.nom, message: texte || '(projet vide)' }).catch(() => {});
   };
 
-  const fichier = p.fichiers.find((f) => f.chemin === fichierOuvert) ?? null;
+  const mettreAJour = () => {
+    if (!p.github) return;
+    const lancer = async () => {
+      setMaj('Téléchargement depuis GitHub…');
+      try {
+        const { proprio, depot, branche } = p.github!;
+        const r = await importerDepot(`github.com/${proprio}/${depot}/tree/${branche}`, reglages.jetonGithub, (fait, total) =>
+          setMaj(`Téléchargement ${fait} / ${total} fichiers…`),
+        );
+        onModifier((proj) => ({ ...proj, fichiers: r.fichiers, github: r.lien, supprimes: [] }));
+        setMaj(null);
+      } catch (e) {
+        setMaj(null);
+        Alert.alert('Mise à jour impossible', (e as Error).message);
+      }
+    };
+    if (changements.length) {
+      Alert.alert(
+        'Remplacer tes changements ?',
+        `Tu as ${changements.length} changement(s) pas encore envoyé(s). La version de GitHub va les remplacer.`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Remplacer', style: 'destructive', onPress: lancer },
+        ],
+      );
+    } else lancer();
+  };
 
   return (
     <View style={styles.flex}>
-      <Entete couleurs={c} titre={p.nom} sousTitre="Projet Codex" onRetour={onRetour} droite={<PuceIA couleurs={c} />} />
+      <Entete
+        couleurs={c}
+        titre={p.nom}
+        sousTitre={p.github ? `⎇ ${p.github.proprio}/${p.github.depot} · ${p.github.branche}` : `Projet local · ${p.fichiers.length} fichier${p.fichiers.length > 1 ? 's' : ''}`}
+        onRetour={onRetour}
+        droite={
+          <View style={styles.enteteDroite}>
+            {page && (
+              <Pressable
+                onPress={() => ouvrirStudio()}
+                accessibilityRole="button"
+                accessibilityLabel="Ouvrir le Studio"
+                style={({ pressed }) => [styles.boutonStudio, { backgroundColor: c.accent, opacity: pressed ? 0.8 : 1 }]}
+              >
+                <Text style={{ color: c.surAccent, fontWeight: '800', fontSize: 13 }}>▶ Studio</Text>
+              </Pressable>
+            )}
+            <PuceIA couleurs={c} espace="codex" />
+          </View>
+        }
+      />
+
+      {/* Barre GitHub */}
+      <View style={[styles.barreGithub, { borderColor: c.bordure, backgroundColor: c.carte }]}>
+        <Text style={[styles.texteGithub, { color: c.texte }]} numberOfLines={1}>
+          {maj ?? (p.github ? (changements.length ? `${changements.length} changement${changements.length > 1 ? 's' : ''} à envoyer` : 'À jour avec GitHub ✓') : 'Pas encore sur GitHub')}
+        </Text>
+        {maj ? (
+          <ActivityIndicator color={c.accentTexte} />
+        ) : (
+          <View style={styles.actionsGithub}>
+            {p.github && (
+              <Pressable onPress={mettreAJour} hitSlop={6} accessibilityLabel="Mettre à jour depuis GitHub" style={[styles.boutonGithub, { borderColor: c.bordure }]}>
+                <Text style={{ color: c.texte, fontWeight: '700', fontSize: 13 }}>⬇ Tirer</Text>
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => (reglages.jetonGithub.trim() ? setEnvoi(true) : ouvrirReglages('codex'))}
+              accessibilityLabel={p.github ? 'Envoyer sur GitHub' : 'Publier sur GitHub'}
+              style={[styles.boutonGithub, { backgroundColor: c.accent, borderColor: c.accent }]}
+            >
+              <Text style={{ color: c.surAccent, fontWeight: '800', fontSize: 13 }}>
+                {p.github ? `⬆ Pousser${changements.length ? ` (${changements.length})` : ''}` : '⬆ Publier'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
       <View style={[styles.segments, { borderColor: c.bordure }]}>
-        {(['discussion', 'fichiers'] as const).map((o) => {
+        {(['discussion', 'code'] as const).map((o) => {
           const actif = onglet === o;
           return (
             <Pressable
@@ -188,38 +338,55 @@ function VueProjet({
               style={[styles.segment, actif && { backgroundColor: c.accent }]}
             >
               <Text style={{ color: actif ? c.surAccent : c.texte, fontWeight: '700' }}>
-                {o === 'discussion' ? 'Discussion' : `Fichiers (${p.fichiers.length})`}
+                {o === 'discussion' ? '💬 Discussion' : `</> Code (${p.fichiers.length})`}
               </Text>
             </Pressable>
           );
         })}
       </View>
 
-      {onglet === 'discussion' ? (
+      <View style={[styles.flex, onglet !== 'discussion' && styles.cache]}>
         <Discussion
           couleurs={c}
+          espace="codex"
           messages={p.messages}
-          systeme={consigneCodex(p)}
+          systeme={consigneCodex(p, limiteContexte(connexion.fournisseur))}
+          maxTokens={connexion.fournisseur === 'anthropic' ? 32000 : undefined}
+          raccourcis={p.fichiers.length ? RACCOURCIS : undefined}
+          onOuvrirStudio={ouvrirStudio}
+          onImporterDansProjet={importer}
           placeholder="Décris ce que tu veux coder…"
           onMessages={(messages) => onModifier((proj) => ({ ...proj, messages }))}
-          onEnregistrerFichier={(b) => enregistrer([b])}
-          fichiersExistants={chemins}
-          suggestions={[
-            'Crée une page web simple avec un bouton orange',
-            'Écris un script Python qui renomme des photos par date',
-            'Explique-moi la structure de ce projet',
-          ]}
+          onEnregistrerFichier={(b) => enregistrer([{ chemin: b.chemin, code: b.code }])}
+          fichiersExistants={contenus}
+          suggestions={
+            p.fichiers.length
+              ? []
+              : [
+                  'Crée une page web simple avec un bouton orange',
+                  'Écris un script Python qui renomme des photos par date',
+                  'Crée une petite appli de notes en HTML, CSS et JavaScript',
+                ]
+          }
           accueil={
-            <Text style={[styles.accueil, { color: c.texte }]}>
-              Décris ton idée : Codex écrit les fichiers, tu les enregistres dans le projet.
-            </Text>
+            <View style={{ gap: 6, marginBottom: 6 }}>
+              <Text style={[styles.accueil, { color: c.texte }]}>
+                {p.fichiers.length
+                  ? `Codex connaît les ${p.fichiers.length} fichiers de ce projet. Demande un scan, une correction ou une nouvelle fonction.`
+                  : 'Décris ton idée : Codex écrit les fichiers, tu les enregistres dans le projet.'}
+              </Text>
+              <Text style={{ color: c.texteDoux, fontSize: 14 }}>
+                IA : {FOURNISSEURS[connexion.fournisseur].nom} · {connexion.modele}. Le bouton + envoie des images
+                (ex. une capture d’erreur) ou des fichiers.
+              </Text>
+            </View>
           }
           actionReponse={(texte) => {
             const blocs = blocsAvecFichier(texte);
             if (blocs.length < 2) return null;
             return (
               <Pressable
-                onPress={() => enregistrer(blocs)}
+                onPress={() => enregistrer(blocs.map((b) => ({ chemin: b.chemin, code: b.code })))}
                 style={({ pressed }) => [styles.boutonSecondaire, { borderColor: c.accent, opacity: pressed ? 0.7 : 1 }]}
               >
                 <Text style={{ color: c.accentTexte, fontWeight: '700' }}>Enregistrer les {blocs.length} fichiers</Text>
@@ -227,160 +394,37 @@ function VueProjet({
             );
           }}
         />
-      ) : (
-        <FlatList
-          data={p.fichiers}
-          keyExtractor={(f) => f.chemin}
-          contentContainerStyle={styles.liste}
-          ListHeaderComponent={
-            p.fichiers.length ? (
-              <Pressable onPress={exporter} style={styles.lienExporter}>
-                <Text style={{ color: c.accentTexte, fontWeight: '700' }}>Partager tout le projet →</Text>
-              </Pressable>
-            ) : null
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => setFichierOuvert(item.chemin)}
-              style={({ pressed }) => [styles.ligne, { backgroundColor: c.carte, borderColor: c.bordure, opacity: pressed ? 0.8 : 1 }]}
-            >
-              <View style={styles.flex}>
-                <Text numberOfLines={1} style={[styles.chemin, { color: c.texte }]}>
-                  {item.chemin}
-                </Text>
-                <Text style={{ color: c.texteDoux, fontSize: 13 }}>
-                  {item.contenu.split('\n').length} ligne{item.contenu.split('\n').length > 1 ? 's' : ''} · {new Date(item.majLe).toLocaleString('fr-CA')}
-                </Text>
-              </View>
+      </View>
+
+      {onglet === 'code' && (
+        <View style={styles.flex}>
+          <Explorateur
+            fichiers={p.fichiers}
+            couleurs={c}
+            changements={changements}
+            onSauver={(chemin, contenu) => enregistrer([{ chemin, code: contenu }])}
+            onSupprimer={supprimer}
+            onStudio={(f) => setStudio({ html: assemblerHTML(f.contenu, f.chemin, p.fichiers), titre: f.chemin })}
+            onNouveau={(chemin) => {
+              if (!contenus[chemin]) enregistrer([{ chemin, code: '' }]);
+            }}
+          />
+          {p.fichiers.length > 0 && (
+            <Pressable onPress={exporter} style={[styles.lienExporter, { borderColor: c.bordure }]}>
+              <Text style={{ color: c.accentTexte, fontWeight: '700' }}>Partager tout le projet (texte) →</Text>
             </Pressable>
           )}
-          ListEmptyComponent={
-            <Text style={[styles.vide, { color: c.texteDoux }]}>
-              Aucun fichier. Dans la discussion, touche « Enregistrer » sur un bloc de code.
-            </Text>
-          }
-        />
+        </View>
       )}
 
-      <VueFichier
-        fichier={fichier}
+      <EnvoiGithub
+        projet={envoi ? p : null}
         couleurs={c}
-        onFermer={() => setFichierOuvert(null)}
-        onSauver={(contenu) =>
-          onModifier((proj) => ({
-            ...proj,
-            fichiers: proj.fichiers.map((f) => (f.chemin === fichierOuvert ? { ...f, contenu, majLe: Date.now() } : f)),
-          }))
-        }
-        onSupprimer={() => {
-          onModifier((proj) => ({ ...proj, fichiers: proj.fichiers.filter((f) => f.chemin !== fichierOuvert) }));
-          setFichierOuvert(null);
-        }}
+        onFermer={() => setEnvoi(false)}
+        onSynchronise={(nouveau) => onModifier(() => nouveau)}
       />
+      <Studio html={studio?.html ?? null} titre={studio?.titre ?? ''} couleurs={c} onFermer={() => setStudio(null)} />
     </View>
-  );
-}
-
-function VueFichier({
-  fichier,
-  couleurs: c,
-  onFermer,
-  onSauver,
-  onSupprimer,
-}: {
-  fichier: Fichier | null;
-  couleurs: Couleurs;
-  onFermer: () => void;
-  onSauver: (contenu: string) => void;
-  onSupprimer: () => void;
-}) {
-  const [edition, setEdition] = useState<string | null>(null);
-  const [copie, setCopie] = useState(false);
-
-  const fermer = () => {
-    setEdition(null);
-    onFermer();
-  };
-
-  if (!fichier) return null;
-
-  return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={fermer}>
-      <SafeAreaView style={[styles.flex, { backgroundColor: c.fond }]}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.barre}>
-            <Pressable onPress={fermer} hitSlop={12}>
-              <Text style={[styles.lien, { color: c.accentTexte }]}>Fermer</Text>
-            </Pressable>
-            <Text numberOfLines={1} style={[styles.titreBarre, { color: c.texte, fontFamily: POLICE_CODE }]}>
-              {fichier.chemin}
-            </Text>
-            <Pressable
-              hitSlop={12}
-              onPress={() => {
-                if (edition === null) setEdition(fichier.contenu);
-                else {
-                  onSauver(edition);
-                  setEdition(null);
-                }
-              }}
-            >
-              <Text style={[styles.lien, { color: c.accentTexte }]}>{edition === null ? 'Modifier' : 'Enregistrer'}</Text>
-            </Pressable>
-          </View>
-
-          {edition === null ? (
-            <ScrollView style={styles.flex} contentContainerStyle={styles.marges}>
-              <ScrollView horizontal>
-                <Text selectable style={[styles.code, { color: c.texte }]}>
-                  {fichier.contenu}
-                </Text>
-              </ScrollView>
-            </ScrollView>
-          ) : (
-            <TextInput
-              value={edition}
-              onChangeText={setEdition}
-              multiline
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              style={[styles.code, styles.editeur, { color: c.texte, backgroundColor: c.carte, borderColor: c.bordure }]}
-            />
-          )}
-
-          <View style={[styles.actions, { borderColor: c.bordure }]}>
-            <Pressable
-              onPress={async () => {
-                await Clipboard.setStringAsync(fichier.contenu);
-                setCopie(true);
-                setTimeout(() => setCopie(false), 1500);
-              }}
-              style={[styles.boutonAction, { backgroundColor: c.accent }]}
-            >
-              <Text style={[styles.texteBouton, { color: c.surAccent }]}>{copie ? 'Copié ✓' : 'Copier'}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => Share.share({ title: fichier.chemin, message: fichier.contenu }).catch(() => {})}
-              style={[styles.boutonAction, { backgroundColor: c.accent }]}
-            >
-              <Text style={[styles.texteBouton, { color: c.surAccent }]}>Partager</Text>
-            </Pressable>
-            <Pressable
-              onPress={() =>
-                Alert.alert('Supprimer ce fichier ?', fichier.chemin, [
-                  { text: 'Annuler', style: 'cancel' },
-                  { text: 'Supprimer', style: 'destructive', onPress: onSupprimer },
-                ])
-              }
-              style={[styles.boutonAction, { borderColor: c.danger, borderWidth: 1 }]}
-            >
-              <Text style={[styles.texteBouton, { color: c.danger }]}>Supprimer</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </Modal>
   );
 }
 
@@ -393,56 +437,237 @@ function NouveauProjet({
   visible: boolean;
   couleurs: Couleurs;
   onFermer: () => void;
-  onCreer: (nom: string, description: string) => void;
+  onCreer: (nom: string, description: string, fichiers?: Fichier[], github?: LienGithub) => void;
 }) {
+  const { reglages, ouvrirReglages } = useReglagesIA();
+  const jeton = reglages.jetonGithub;
+  const [mode, setMode] = useState<'vide' | 'github'>('vide');
+  const [depots, setDepots] = useState<Depot[] | null>(null);
+  const [chargementDepots, setChargementDepots] = useState(false);
+  const [filtre, setFiltre] = useState('');
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
+  const [adresse, setAdresse] = useState('');
+  const [progres, setProgres] = useState<string | null>(null);
+  const [erreur, setErreur] = useState('');
   const champ = [styles.champ, { backgroundColor: c.carte, borderColor: c.bordure, color: c.texte }];
 
-  const creer = () => {
-    if (!nom.trim()) return;
-    onCreer(nom, description);
+  const reinitialiser = () => {
     setNom('');
     setDescription('');
+    setAdresse('');
+    setFiltre('');
+    setErreur('');
+    setProgres(null);
   };
 
+  // Chaque import a un numéro : si on ferme la fenêtre pendant l'import, son résultat est ignoré.
+  const importEnCours = useRef(0);
+  const fermer = () => {
+    importEnCours.current++;
+    reinitialiser();
+    onFermer();
+  };
+
+  const creer = async () => {
+    setErreur('');
+    if (mode === 'vide') {
+      if (!nom.trim()) return;
+      onCreer(nom, description);
+      reinitialiser();
+      return;
+    }
+    if (!adresse.trim() || progres) return;
+    setProgres('Lecture du dépôt…');
+    const numero = ++importEnCours.current;
+    const toujoursDemande = () => numero === importEnCours.current;
+    try {
+      const r = await importerDepot(adresse, jeton, (fait, total) => {
+        if (toujoursDemande()) setProgres(`Téléchargement ${fait} / ${total} fichiers…`);
+      });
+      if (!toujoursDemande()) return; // import annulé
+      onCreer(nom.trim() || r.nom, r.description, r.fichiers, r.lien);
+      reinitialiser();
+    } catch (e) {
+      if (!toujoursDemande()) return;
+      setErreur((e as Error).message);
+      setProgres(null);
+    }
+  };
+
+  const pret = mode === 'vide' ? !!nom.trim() : !!adresse.trim() && !progres;
+
+  const chargerDepots = async () => {
+    if (!jeton.trim() || chargementDepots) return;
+    setChargementDepots(true);
+    setErreur('');
+    try {
+      setDepots(await listerDepots(jeton));
+    } catch (e) {
+      setErreur((e as Error).message);
+    } finally {
+      setChargementDepots(false);
+    }
+  };
+
+  const depotsFiltres = (depots ?? []).filter((d) => d.nomComplet.toLowerCase().includes(filtre.trim().toLowerCase()));
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onFermer}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={fermer}>
       <SafeAreaView style={[styles.flex, { backgroundColor: c.fond }]}>
         <View style={styles.barre}>
-          <Pressable onPress={onFermer} hitSlop={12}>
+          <Pressable onPress={fermer} hitSlop={12}>
             <Text style={[styles.lien, { color: c.accentTexte }]}>Annuler</Text>
           </Pressable>
           <Text style={[styles.titreBarre, { color: c.texte }]}>Nouveau projet</Text>
           <View style={{ width: 60 }} />
         </View>
-        <View style={[styles.marges, { gap: 10 }]}>
-          <Text style={[styles.etiquette, { color: c.texteDoux }]}>NOM</Text>
+        <ScrollView contentContainerStyle={[styles.marges, { gap: 10 }]} keyboardShouldPersistTaps="handled">
+          <View style={[styles.segments, { borderColor: c.bordure, marginHorizontal: 0 }]}>
+            {(['vide', 'github'] as const).map((m) => {
+              const actif = mode === m;
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => setMode(m)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: actif }}
+                  style={[styles.segment, actif && { backgroundColor: c.accent }]}
+                >
+                  <Text style={{ color: actif ? c.surAccent : c.texte, fontWeight: '700' }}>
+                    {m === 'vide' ? 'Projet vide' : 'Importer de GitHub'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {mode === 'github' && (
+            <>
+              {jeton.trim() ? (
+                <>
+                  <View style={styles.ligneMesDepots}>
+                    <Text style={[styles.etiquette, { color: c.texteDoux }]}>MES DÉPÔTS</Text>
+                    <Pressable onPress={chargerDepots} hitSlop={8}>
+                      <Text style={{ color: c.accentTexte, fontWeight: '700' }}>
+                        {depots ? '↻ Actualiser' : 'Afficher mes dépôts'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  {chargementDepots && <ActivityIndicator color={c.accentTexte} />}
+                  {depots && (
+                    <>
+                      <TextInput
+                        value={filtre}
+                        onChangeText={setFiltre}
+                        placeholder="Chercher un dépôt…"
+                        placeholderTextColor={c.texteDoux}
+                        autoCapitalize="none"
+                        style={champ}
+                      />
+                      <View style={[styles.listeDepots, { borderColor: c.bordure, backgroundColor: c.carte }]}>
+                        {depotsFiltres.slice(0, 30).map((d) => {
+                          const choisi = adresse === `github.com/${d.nomComplet}`;
+                          return (
+                            <Pressable
+                              key={d.nomComplet}
+                              onPress={() => setAdresse(`github.com/${d.nomComplet}`)}
+                              style={[styles.ligneDepot, choisi && { backgroundColor: c.fond }]}
+                            >
+                              <Text style={{ fontSize: 15 }}>{d.prive ? '🔒' : '📦'}</Text>
+                              <View style={styles.flex}>
+                                <Text numberOfLines={1} style={{ color: c.texte, fontWeight: choisi ? '800' : '600', fontFamily: POLICE_CODE, fontSize: 14 }}>
+                                  {d.nomComplet}
+                                </Text>
+                                {!!d.description && (
+                                  <Text numberOfLines={1} style={{ color: c.texteDoux, fontSize: 12 }}>
+                                    {d.description}
+                                  </Text>
+                                )}
+                              </View>
+                              {choisi && <Text style={{ color: c.accentTexte, fontWeight: '900' }}>✓</Text>}
+                            </Pressable>
+                          );
+                        })}
+                        {!depotsFiltres.length && (
+                          <Text style={{ color: c.texteDoux, padding: 12 }}>Aucun dépôt trouvé.</Text>
+                        )}
+                      </View>
+                    </>
+                  )}
+                </>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    fermer();
+                    ouvrirReglages('codex');
+                  }}
+                  style={[styles.boutonSecondaire, { borderColor: c.accent, alignSelf: 'stretch' }]}
+                >
+                  <Text style={{ color: c.accentTexte, fontWeight: '700', lineHeight: 20 }}>
+                    Ajoute ton jeton GitHub (Réglages IA → Codex) pour voir tes dépôts, même privés, et envoyer tes changements →
+                  </Text>
+                </Pressable>
+              )}
+
+              <Text style={[styles.etiquette, { color: c.texteDoux }]}>ADRESSE DU DÉPÔT GITHUB</Text>
+              <TextInput
+                value={adresse}
+                onChangeText={setAdresse}
+                placeholder="github.com/proprio/depot"
+                placeholderTextColor={c.texteDoux}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={champ}
+              />
+              <Text style={{ color: c.texteDoux, fontSize: 13, lineHeight: 19 }}>
+                Une branche précise : github.com/proprio/depot/tree/nom-de-branche. Codex lit tous les fichiers texte et
+                code (jusqu’à 300 fichiers) pour comprendre le projet au complet.
+              </Text>
+            </>
+          )}
+
+          <Text style={[styles.etiquette, { color: c.texteDoux }]}>NOM{mode === 'github' ? ' (FACULTATIF)' : ''}</Text>
           <TextInput
             value={nom}
             onChangeText={setNom}
-            placeholder="Ex. : Site de ti-lex"
+            placeholder={mode === 'github' ? 'Nom du dépôt par défaut' : 'Ex. : Site de ti-lex'}
             placeholderTextColor={c.texteDoux}
             style={champ}
-            autoFocus
           />
-          <Text style={[styles.etiquette, { color: c.texteDoux }]}>DESCRIPTION (FACULTATIF)</Text>
-          <TextInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Langage, but du projet…"
-            placeholderTextColor={c.texteDoux}
-            multiline
-            style={[...champ, { minHeight: 90, paddingTop: 12, textAlignVertical: 'top' }]}
-          />
+          {mode === 'vide' && (
+            <>
+              <Text style={[styles.etiquette, { color: c.texteDoux }]}>DESCRIPTION (FACULTATIF)</Text>
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Langage, but du projet…"
+                placeholderTextColor={c.texteDoux}
+                multiline
+                style={[...champ, { minHeight: 90, paddingTop: 12, textAlignVertical: 'top' }]}
+              />
+            </>
+          )}
+
+          {!!erreur && <Text style={{ color: c.danger, fontSize: 14, lineHeight: 20 }}>{erreur}</Text>}
+          {!!progres && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <ActivityIndicator color={c.accentTexte} />
+              <Text style={{ color: c.texte }}>{progres}</Text>
+            </View>
+          )}
+
           <Pressable
             onPress={creer}
-            disabled={!nom.trim()}
-            style={[styles.bouton, { backgroundColor: c.accent, opacity: nom.trim() ? 1 : 0.4, marginTop: 10 }]}
+            disabled={!pret}
+            style={[styles.bouton, { backgroundColor: c.accent, opacity: pret ? 1 : 0.4, marginTop: 10 }]}
           >
-            <Text style={[styles.texteBouton, { color: c.surAccent }]}>Créer le projet</Text>
+            <Text style={[styles.texteBouton, { color: c.surAccent }]}>
+              {mode === 'vide' ? 'Créer le projet' : 'Importer le projet'}
+            </Text>
           </Pressable>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </Modal>
   );
@@ -450,6 +675,27 @@ function NouveauProjet({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  cache: { display: 'none' },
+  ligneMesDepots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  listeDepots: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, overflow: 'hidden' },
+  ligneDepot: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  barreGithub: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  texteGithub: { flex: 1, fontSize: 13, fontWeight: '700' },
+  actionsGithub: { flexDirection: 'row', gap: 6 },
+  boutonGithub: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
+  enteteDroite: { alignItems: 'flex-end', gap: 6 },
+  boutonStudio: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   marges: { paddingHorizontal: 20, paddingBottom: 14 },
   accueil: { fontSize: 18, fontWeight: '700', lineHeight: 25, marginBottom: 6 },
   bouton: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
@@ -470,7 +716,7 @@ const styles = StyleSheet.create({
   vide: { textAlign: 'center', marginTop: 40, fontSize: 15, lineHeight: 22 },
   segments: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 8, borderWidth: 1, borderRadius: 999, padding: 3 },
   segment: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 999 },
-  lienExporter: { paddingVertical: 6 },
+  lienExporter: { paddingVertical: 12, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth },
   barre: {
     flexDirection: 'row',
     justifyContent: 'space-between',

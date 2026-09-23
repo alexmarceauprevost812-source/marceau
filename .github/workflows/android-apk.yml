@@ -5,10 +5,21 @@ name: Construire l'APK Android
 # avec les builds EAS. Prérequis : `npx eas-cli init` (identifiant du projet
 # dans app.json) et un secret de dépôt EXPO_TOKEN.
 
+# À chaque déploiement (push sur main ou sur la branche de travail), un nouvel APK est
+# construit et publié comme « version » GitHub (tag build-N). L'application installée
+# vérifie cette version au démarrage et propose la mise à jour.
+
 on:
   workflow_dispatch:
   push:
+    branches: [main, claude/open-source-mobile-app-ufs08v]
     tags: ["v*"]
+    paths-ignore: ["**.md", "LICENSE"]
+
+# Un seul build à la fois : un nouveau déploiement annule le build précédent.
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -59,6 +70,19 @@ jobs:
       - name: Vérifier le code
         run: npm run typecheck
 
+      - name: Numéroter la version (versionCode = numéro du build)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const n = Number(process.env.GITHUB_RUN_NUMBER) + 1;
+            const cfg = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            cfg.expo.version = `1.0.${n}`;
+            cfg.expo.android.versionCode = n;
+            fs.writeFileSync("app.json", JSON.stringify(cfg, null, 2) + "\n");
+            console.log(`Version 1.0.${n} (versionCode ${n})`);
+          '
+          echo "NUMERO=$((GITHUB_RUN_NUMBER + 1))" >> "$GITHUB_ENV"
+
       - name: Compiler l'APK signé avec EAS
         run: eas build --platform android --profile apk --local --non-interactive --output marceau.apk
 
@@ -68,8 +92,12 @@ jobs:
           name: marceau-apk
           path: marceau.apk
 
-      - name: Joindre l'APK à la version
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publier la mise à jour (version GitHub build-N)
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: build-${{ env.NUMERO }}
+          target_commitish: ${{ github.sha }}
+          name: Marceau 1.0.${{ env.NUMERO }}
+          body: ${{ github.event.head_commit.message || 'Nouvelle version de Marceau' }}
+          make_latest: true
           files: marceau.apk

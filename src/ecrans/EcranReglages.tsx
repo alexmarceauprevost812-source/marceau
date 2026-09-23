@@ -15,30 +15,36 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { listerModeles } from '../ia/client';
-import { FOURNISSEURS, ORDRE_FOURNISSEURS, type IdFournisseur, type ReglagesIA } from '../ia/fournisseurs';
+import { utilisateurGithub } from '../ia/github';
+import { FOURNISSEURS, ORDRE_FOURNISSEURS, type Espace, type IdFournisseur, type ReglagesIA } from '../ia/fournisseurs';
 import { useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 
-type Props = { visible: boolean; couleurs: Couleurs; onFermer: () => void };
+type Props = { visible: boolean; couleurs: Couleurs; onFermer: () => void; espaceInitial?: Espace };
 
 /** Choix du fournisseur d'IA, du modèle et des clés API. */
-export function EcranReglages({ visible, couleurs: c, onFermer }: Props) {
+export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 'chat' }: Props) {
   const { reglages, enregistrer } = useReglagesIA();
   const [brouillon, setBrouillon] = useState<ReglagesIA>(reglages);
   const [modeles, setModeles] = useState<string[] | null>(null);
   const [chargement, setChargement] = useState(false);
   const [message, setMessage] = useState('');
+  const [espace, setEspace] = useState<Espace>(espaceInitial);
+  const [testGithub, setTestGithub] = useState<{ ok: boolean; texte: string } | null>(null);
+  const [testEnCours, setTestEnCours] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setBrouillon(reglages);
       setModeles(null);
       setMessage('');
+      setEspace(espaceInitial);
+      setTestGithub(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  const id = brouillon.actif;
+  const id = espace === 'codex' ? brouillon.actifCodex : brouillon.actif;
   const f = FOURNISSEURS[id];
   const config = brouillon.configs[id];
 
@@ -46,7 +52,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer }: Props) {
     setBrouillon({ ...brouillon, configs: { ...brouillon.configs, [id]: { ...config, [champ]: valeur } } });
 
   const choisir = (nouveau: IdFournisseur) => {
-    setBrouillon({ ...brouillon, actif: nouveau });
+    setBrouillon(espace === 'codex' ? { ...brouillon, actifCodex: nouveau } : { ...brouillon, actif: nouveau });
     setModeles(null);
     setMessage('');
   };
@@ -62,6 +68,19 @@ export function EcranReglages({ visible, couleurs: c, onFermer }: Props) {
       setMessage((e as Error).message);
     } finally {
       setChargement(false);
+    }
+  };
+
+  const testerGithub = async () => {
+    setTestEnCours(true);
+    setTestGithub(null);
+    try {
+      const login = await utilisateurGithub(brouillon.jetonGithub);
+      setTestGithub({ ok: true, texte: `Connecté à GitHub : ${login} ✓` });
+    } catch (e) {
+      setTestGithub({ ok: false, texte: (e as Error).message });
+    } finally {
+      setTestEnCours(false);
     }
   };
 
@@ -88,7 +107,31 @@ export function EcranReglages({ visible, couleurs: c, onFermer }: Props) {
           </View>
 
           <ScrollView contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
-            <Text style={[styles.etiquette, { color: c.texteDoux }]}>IA UTILISÉE</Text>
+            <View style={[styles.segments, { borderColor: c.bordure }]}>
+              {(['chat', 'codex'] as const).map((e) => {
+                const actif = espace === e;
+                return (
+                  <Pressable
+                    key={e}
+                    onPress={() => {
+                      setEspace(e);
+                      setModeles(null);
+                      setMessage('');
+                    }}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: actif }}
+                    style={[styles.segment, actif && { backgroundColor: c.accent }]}
+                  >
+                    <Text style={{ color: actif ? c.surAccent : c.texte, fontWeight: '700' }}>
+                      {e === 'chat' ? '💬 Chat et tâches' : '</> Codex'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={[styles.etiquette, { color: c.texteDoux }]}>
+              IA UTILISÉE {espace === 'codex' ? 'PAR LE CODEX' : 'PAR LE CHAT'}
+            </Text>
             {ORDRE_FOURNISSEURS.map((cle) => {
               const four = FOURNISSEURS[cle];
               const actif = cle === id;
@@ -194,6 +237,56 @@ export function EcranReglages({ visible, couleurs: c, onFermer }: Props) {
               accessibilityLabel="Adresse du serveur"
             />
 
+            {espace === 'codex' && (
+              <>
+                <Text style={[styles.etiquette, { color: c.texteDoux }]}>JETON GITHUB (LIRE ET ÉCRIRE TES PROJETS)</Text>
+                <TextInput
+                  value={brouillon.jetonGithub}
+                  onChangeText={(v) => {
+                    setBrouillon({ ...brouillon, jetonGithub: v });
+                    setTestGithub(null);
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                  placeholder="ghp_… ou github_pat_…"
+                  placeholderTextColor={c.texteDoux}
+                  style={champ}
+                  accessibilityLabel="Jeton GitHub"
+                />
+                <View style={styles.ligneLien}>
+                  <Pressable
+                    onPress={testerGithub}
+                    disabled={!brouillon.jetonGithub.trim() || testEnCours}
+                    accessibilityRole="button"
+                    style={styles.ligneLien}
+                  >
+                    {testEnCours && <ActivityIndicator color={c.accentTexte} />}
+                    <Text style={[styles.lien, { color: c.accentTexte, opacity: brouillon.jetonGithub.trim() ? 1 : 0.5 }]}>
+                      Tester le jeton
+                    </Text>
+                  </Pressable>
+                  <Text style={{ color: c.texteDoux }}>·</Text>
+                  <Pressable
+                    onPress={() => Linking.openURL('https://github.com/settings/tokens/new?scopes=repo&description=Marceau%20Codex')}
+                    accessibilityRole="link"
+                  >
+                    <Text style={[styles.lien, { color: c.accentTexte }]}>Créer un jeton →</Text>
+                  </Pressable>
+                </View>
+                {testGithub && (
+                  <Text style={{ color: testGithub.ok ? c.texte : c.danger, fontSize: 14, fontWeight: '600' }}>
+                    {testGithub.texte}
+                  </Text>
+                )}
+                <Text style={[styles.aide, { color: c.texteDoux }]}>
+                  Avec ce jeton, le Codex voit tes dépôts (même privés), les lit au complet et envoie tes changements
+                  (commit + push). Crée un jeton « classic » avec la case « repo », ou un jeton « fine-grained » avec
+                  « Contents : Read and write ». Il reste dans le coffre sécurisé du téléphone.
+                </Text>
+              </>
+            )}
+
             <Pressable onPress={sauver} accessibilityRole="button" style={[styles.bouton, { backgroundColor: c.accent }]}>
               <Text style={[styles.texteBouton, { color: c.surAccent }]}>Enregistrer</Text>
             </Pressable>
@@ -206,6 +299,8 @@ export function EcranReglages({ visible, couleurs: c, onFermer }: Props) {
 
 const styles = StyleSheet.create({
   ecran: { flex: 1 },
+  segments: { flexDirection: 'row', borderWidth: 1, borderRadius: 999, padding: 3, marginTop: 4 },
+  segment: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 999 },
   flex: { flex: 1 },
   barre: {
     flexDirection: 'row',

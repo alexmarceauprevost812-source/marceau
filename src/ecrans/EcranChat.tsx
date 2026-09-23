@@ -2,14 +2,20 @@ import { useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { nouvelId, usePersistant } from '../hooks/usePersistant';
+import { supprimerPieces } from '../ia/pieces';
 import type { Couleurs } from '../theme';
 import type { Conversation, Mode } from '../types';
 import { Discussion } from '../ui/Discussion';
 import { Entete, PuceIA } from '../ui/Entete';
+import { Studio } from '../ui/Studio';
 
 const BASE =
   "Tu es l'IA intégrée à Marceau, une application québécoise. Réponds en français (québécois bienvenu) " +
-  'sauf si on te parle dans une autre langue. Utilise le Markdown (titres, listes, **gras**, blocs de code).';
+  'sauf si on te parle dans une autre langue. Utilise le Markdown (titres, listes, **gras**, blocs de code). ' +
+  "Tu peux voir les images et lire les fichiers qu'on t'envoie : résume-les, explique-les ou modifie-les sur demande " +
+  '(pour un fichier modifié, redonne-le au complet dans un bloc de code). ' +
+  "Quand on te demande une page web, donne un seul fichier HTML complet (CSS et JavaScript à l'intérieur) " +
+  'dans un bloc ```html index.html : la personne peut la voir en direct avec le bouton ▶ Studio.';
 
 export const MODES: Record<Mode, { nom: string; icone: string; description: string; systeme: string; suggestions: string[] }> = {
   libre: {
@@ -17,7 +23,7 @@ export const MODES: Record<Mode, { nom: string; icone: string; description: stri
     icone: '💬',
     description: 'Jaser de tout avec une IA',
     systeme: `${BASE} Sois chaleureux, clair et utile.`,
-    suggestions: ['Explique-moi comment fonctionne une IA', 'Donne-moi 5 idées de soupers rapides', 'Aide-moi à planifier ma semaine'],
+    suggestions: ['Crée une page web de minuterie avec un gros bouton orange', 'Donne-moi 5 idées de soupers rapides', 'Aide-moi à planifier ma semaine'],
   },
   ecriture: {
     nom: 'Écriture',
@@ -43,6 +49,7 @@ export const MODES: Record<Mode, { nom: string; icone: string; description: stri
 export function EcranChat({ couleurs: c }: { couleurs: Couleurs }) {
   const [conversations, setConversations] = usePersistant<Conversation[]>('marceau:conversations', []);
   const [ouverte, setOuverte] = useState<string | null>(null);
+  const [studio, setStudio] = useState<{ html: string; titre: string } | null>(null);
 
   const courante = useMemo(() => conversations.find((x) => x.id === ouverte) ?? null, [conversations, ouverte]);
   const triees = useMemo(() => [...conversations].sort((a, b) => b.majLe - a.majLe), [conversations]);
@@ -60,7 +67,10 @@ export function EcranChat({ couleurs: c }: { couleurs: Couleurs }) {
       {
         text: 'Supprimer',
         style: 'destructive',
-        onPress: () => setConversations((prev) => prev.filter((x) => x.id !== conv.id)),
+        onPress: () => {
+          supprimerPieces(conv.messages.flatMap((m) => m.pieces ?? []));
+          setConversations((prev) => prev.filter((x) => x.id !== conv.id));
+        },
       },
     ]);
 
@@ -83,6 +93,8 @@ export function EcranChat({ couleurs: c }: { couleurs: Couleurs }) {
         />
         <Discussion
           couleurs={c}
+          espace="chat"
+          onOuvrirStudio={(b) => setStudio({ html: b.code, titre: b.chemin || 'Page créée par l’IA' })}
           messages={courante.messages}
           systeme={mode.systeme}
           suggestions={mode.suggestions}
@@ -92,20 +104,21 @@ export function EcranChat({ couleurs: c }: { couleurs: Couleurs }) {
             </Text>
           }
           onMessages={(messages) =>
-            setConversations((prev) =>
-              prev.map((x) =>
-                x.id === courante.id
-                  ? {
-                      ...x,
-                      messages,
-                      majLe: Date.now(),
-                      titre: x.titre || (messages[0]?.content ?? '').replace(/\s+/g, ' ').slice(0, 48),
-                    }
-                  : x,
-              ),
-            )
+            setConversations((prev) => {
+              const maj = (x: Conversation): Conversation => ({
+                ...x,
+                messages,
+                majLe: Date.now(),
+                titre: x.titre || (messages[0]?.content ?? '').replace(/\s+/g, ' ').slice(0, 48),
+              });
+              // Une discussion neuve quittée pendant son premier échange a déjà été retirée
+              // (les discussions vides ne sont pas gardées) : on la remet avec ses messages.
+              if (!prev.some((x) => x.id === courante.id)) return messages.length ? [maj(courante), ...prev] : prev;
+              return prev.map((x) => (x.id === courante.id ? maj(x) : x));
+            })
           }
         />
+        <Studio html={studio?.html ?? null} titre={studio?.titre ?? ''} couleurs={c} onFermer={() => setStudio(null)} />
       </View>
     );
   }
