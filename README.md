@@ -13,6 +13,24 @@ construite avec [Expo](https://expo.dev) et React Native.
 - Sauvegarde locale sur le téléphone (aucun compte, aucune donnée envoyée sur Internet)
 - Thème clair et sombre automatique
 - Interface en français, accessible (lecteurs d'écran)
+- **Assistant IA gratuit** : décris un objectif, l'IA le découpe en tâches
+
+## Assistant IA
+
+Touchez **✨ IA** en haut de l'écran. Deux fournisseurs gratuits au choix (dans *Réglages*) :
+
+| Fournisseur | Coût | Clé | Où tourne l'IA |
+|---|---|---|---|
+| [OpenCode Zen](https://opencode.ai/docs/zen/) | Modèles gratuits (`big-pickle`, `nemotron-3.5-lightning-free`…) | Gratuite, sur [opencode.ai/auth](https://opencode.ai/auth) | En ligne |
+| [Ollama](https://ollama.com) | Gratuit, modèles open source (Llama, Qwen, Gemma, Mistral) | Aucune | Sur votre ordinateur |
+
+Pour Ollama : lancez `OLLAMA_HOST=0.0.0.0 ollama serve`, téléchargez un modèle
+(`ollama pull llama3.2`) et mettez l'adresse IP de l'ordinateur dans les réglages
+(ex. `http://192.168.1.10:11434/v1`). Le téléphone doit être sur le même Wi-Fi.
+
+La clé API est gardée dans le coffre sécurisé du téléphone. Avec les modèles gratuits
+d'OpenCode Zen, vos requêtes peuvent servir à améliorer ces modèles ; avec Ollama, rien
+ne quitte votre réseau.
 
 ## Essayer l'application
 
@@ -58,6 +76,8 @@ npx eas-cli@latest build --platform ios --profile production       # iOS
 ```
 App.tsx                       Écran principal
 src/components/ElementTache   Ligne d'une tâche
+src/components/AssistantIA    Écran de l'assistant IA + réglages
+src/ia/                       Fournisseurs d'IA et appel /chat/completions
 src/hooks/useTaches.ts        État des tâches + sauvegarde (AsyncStorage)
 src/theme.ts                  Couleurs clair / sombre
 src/types.ts                  Types partagés

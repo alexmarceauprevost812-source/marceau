@@ -36,6 +36,15 @@ export function useTaches() {
     ]);
   }, []);
 
+  const ajouterPlusieurs = useCallback((textes: string[]) => {
+    const maintenant = Date.now();
+    const nouvelles = textes
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((texte, i) => ({ id: nouvelId(), texte, terminee: false, creeeLe: maintenant - i }));
+    if (nouvelles.length) setTaches((prev) => [...nouvelles, ...prev]);
+  }, []);
+
   const basculer = useCallback((id: string) => {
     setTaches((prev) =>
       prev.map((t) => (t.id === id ? { ...t, terminee: !t.terminee } : t)),
@@ -50,5 +59,5 @@ export function useTaches() {
     setTaches((prev) => prev.filter((t) => !t.terminee));
   }, []);
 
-  return { taches, chargement, ajouter, basculer, supprimer, viderTerminees };
+  return { taches, chargement, ajouter, ajouterPlusieurs, basculer, supprimer, viderTerminees };
 }
