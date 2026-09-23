@@ -17,11 +17,11 @@ type OptionsDiscussion = {
 
 const VERSION_ANTHROPIC = '2023-06-01';
 
-function base(c: Connexion) {
+export function base(c: Connexion) {
   return c.url.trim().replace(/\/+$/, '');
 }
 
-function entetes(c: Connexion): Record<string, string> {
+export function entetes(c: Connexion): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
   const cle = c.cle.trim();
   if (FOURNISSEURS[c.fournisseur].format === 'anthropic') {
@@ -34,7 +34,7 @@ function entetes(c: Connexion): Record<string, string> {
   return h;
 }
 
-async function erreurLisible(reponse: { status: number; text(): Promise<string> }, c: Connexion) {
+export async function erreurLisible(reponse: { status: number; text(): Promise<string> }, c: Connexion) {
   const detail = await reponse.text().catch(() => '');
   let message = '';
   try {
@@ -56,7 +56,7 @@ async function erreurLisible(reponse: { status: number; text(): Promise<string> 
   }
 }
 
-function erreurReseau(e: unknown, c: Connexion) {
+export function erreurReseau(e: unknown, c: Connexion) {
   if ((e as Error)?.name === 'AbortError') return e as Error;
   return new Error(
     "Impossible de joindre le serveur d'IA. Vérifie l'adresse et ta connexion" +
@@ -81,7 +81,7 @@ export function texteAvecFichiers(m: MessageIA): string {
 }
 
 /** Convertit les messages au format de l'API (images et PDF en base64). */
-async function versAPI(messages: MessageIA[], format: FormatAPI): Promise<unknown[]> {
+export async function versAPI(messages: MessageIA[], format: FormatAPI): Promise<unknown[]> {
   const resultat: unknown[] = [];
   for (const m of messages) {
     const texte = texteAvecFichiers(m);
