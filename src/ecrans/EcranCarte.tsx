@@ -6,7 +6,7 @@ import { WebView } from 'react-native-webview';
 import type { Couleurs } from '../theme';
 
 /** Adresse de la carte (application web TI-LEX-AL). */
-export const URL_CARTE = 'https://ti-lex-al.vercel.app/';
+export const URL_CARTE = 'https://ti-lex-map.vercel.app/';
 
 type Props = { visible: boolean; couleurs: Couleurs; onFermer: () => void };
 
