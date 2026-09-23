@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Marceau",
-    "slug": "marceau",
+    "slug": "marceau-rrd0zefplgfrvgz61mdyt",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -37,6 +37,11 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e394f721-607c-4f0e-a74a-448f7aa32d9f"
+      }
+    }
   }
 }
