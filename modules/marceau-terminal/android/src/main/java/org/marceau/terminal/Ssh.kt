@@ -4,6 +4,7 @@ import android.content.Context
 import com.jcraft.jsch.ChannelShell
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.JSchException
+import com.jcraft.jsch.UserInfo
 import java.io.File
 import java.io.IOException
 import java.io.InputStreamReader
@@ -41,7 +42,10 @@ internal class SessionSsh(
     }
     session = jsch.getSession(utilisateur, hote, port)
     if (!motDePasse.isNullOrEmpty()) session.setPassword(motDePasse)
-    session.setConfig("StrictHostKeyChecking", "no") // accepte un nouveau serveur, refuse une clé changée
+    // « ask » + réponse automatique : un nouveau serveur est accepté et son empreinte enregistrée,
+    // un serveur dont la clé a changé est refusé. (Avec « no », JSch accepte aussi une clé changée.)
+    session.setConfig("StrictHostKeyChecking", "ask")
+    session.userInfo = AccepterNouveauServeur
     session.setConfig("PreferredAuthentications", "publickey,password,keyboard-interactive")
     session.setServerAliveInterval(30_000)
     try {
@@ -107,6 +111,20 @@ internal class SessionSsh(
       canal.disconnect()
       session.disconnect()
     }
+  }
+
+  /**
+   * Réponses automatiques de JSch : oui seulement à « serveur jamais vu, continuer ? ».
+   * Non à tout le reste, dont « la clé a changé, remplacer l'ancienne ? ».
+   */
+  private object AccepterNouveauServeur : UserInfo {
+    override fun getPassphrase(): String? = null
+    override fun getPassword(): String? = null
+    override fun promptPassword(message: String?): Boolean = false
+    override fun promptPassphrase(message: String?): Boolean = false
+    override fun promptYesNo(message: String?): Boolean =
+      message != null && message.contains("can't be established") && !message.contains("HAS CHANGED")
+    override fun showMessage(message: String?) {}
   }
 
   companion object {
