@@ -6,6 +6,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Bureau } from './src/bureau/Bureau';
 import { EcranChat } from './src/ecrans/EcranChat';
 import { EcranCodex } from './src/ecrans/EcranCodex';
+import { EcranAgenda } from './src/ecrans/EcranAgenda';
 import { EcranPreferences } from './src/ecrans/EcranPreferences';
 import { EcranReglages } from './src/ecrans/EcranReglages';
 import { EcranTerminal } from './src/ecrans/EcranTerminal';
@@ -18,12 +19,13 @@ import { Verrou } from './src/securite/Verrou';
 import { useCouleurs, useModeNuit } from './src/theme';
 import { Reactions } from './src/ui/Avatar';
 
-type Ecran = Exclude<Section, 'parametres' | 'preferences'>;
+type Ecran = Exclude<Section, 'agenda' | 'parametres' | 'preferences'>;
 
 export default function App() {
   const couleurs = useCouleurs();
   const nuit = useModeNuit();
   const [preferencesOuvertes, setPreferencesOuvertes] = useState(false);
+  const [agendaOuvert, setAgendaOuvert] = useState(false);
   // L'application s'ouvre toujours sur le Chat.
   const [ecran, setEcran] = useState<Ecran>('chat');
   const [menuOuvert, setMenuOuvert] = useState(false);
@@ -44,6 +46,7 @@ export default function App() {
     // Depuis le Codex, les Paramètres s'ouvrent sur l'IA du Codex.
     if (s === 'parametres') setReglagesOuverts(ecran === 'codex' ? 'codex' : 'chat');
     else if (s === 'preferences') setPreferencesOuvertes(true);
+    else if (s === 'agenda') setAgendaOuvert(true);
     else setEcran(s);
   };
 
@@ -94,6 +97,7 @@ export default function App() {
             couleurs={couleurs}
             onFermer={() => setPreferencesOuvertes(false)}
           />
+          <EcranAgenda visible={agendaOuvert} couleurs={couleurs} onFermer={() => setAgendaOuvert(false)} />
           <Verrou couleurs={couleurs} />
           <Reactions couleurs={couleurs} />
           <StatusBar style={nuit ? 'light' : 'dark'} />

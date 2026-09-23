@@ -19,6 +19,7 @@ export const APPLICATIONS: AppBureau[] = [
   { id: 'projet', nom: 'Projet', icone: '📁', couleur: '#1F9D55', ouvre: 'projet' },
   { id: 'terminal', nom: 'Terminal', icone: '⌨️', couleur: '#1B1B1B', ouvre: 'terminal' },
   { id: 'parametres', nom: 'Paramètres', icone: '⚙️', couleur: '#5B6068', ouvre: 'parametres' },
+  { id: 'agenda', nom: 'Agenda', icone: '📅', couleur: '#0B8F3A', ouvre: 'agenda' },
   { id: 'preferences', nom: 'Préférences', icone: '🎨', couleur: '#E0357A', ouvre: 'preferences' },
   { id: 'mise-a-jour', nom: 'Mise à jour', icone: '⬇️', couleur: '#8B3FE0', ouvre: 'mise-a-jour' },
 ];
