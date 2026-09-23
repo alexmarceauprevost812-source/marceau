@@ -98,6 +98,8 @@ export type ReglagesIA = {
   /** IA du Codex. */
   actifCodex: IdFournisseur;
   configs: Record<IdFournisseur, ConfigFournisseur>;
+  /** Jeton personnel GitHub (lecture et écriture des dépôts dans le Codex). */
+  jetonGithub: string;
 };
 
 /** Ce qu'il faut pour faire un appel : le fournisseur et sa config. */
@@ -112,6 +114,7 @@ export function reglagesParDefaut(): ReglagesIA {
   return {
     actif: 'opencode',
     actifCodex: 'anthropic',
+    jetonGithub: '',
     configs: {
       opencode: configParDefaut('opencode'),
       ollama: configParDefaut('ollama'),

@@ -18,9 +18,6 @@ construite avec [Expo](https://expo.dev) et React Native.
 - **Bouton +** (Chat et Codex) : envoie des photos, des captures, des PDF ou des fichiers texte/code ; l'IA les voit, les résume et les modifie
 - **Studio** : les pages HTML créées par l'IA s'affichent en direct dans l'appli (▶ Studio)
 - **Codex** : projets de code avec coloration syntaxique ; importe un dépôt GitHub, scanne tout le projet, corrige les bugs ; fonctionne avec ta clé Claude (Anthropic) par défaut
-  - Explorateur comme dans un éditeur : dossiers repliables, fichiers qui s'ouvrent en panneaux, numéros de ligne, modification directe
-  - Blocs de code repliables dans la discussion, avec les changements (+ / −) par rapport au projet
-  - **GitHub en lecture et écriture** avec ton jeton : liste de tes dépôts (même privés), import complet, « Tirer » pour mettre à jour, « Pousser » pour faire un commit + push (sur la branche ou une nouvelle), ou « Publier » un projet dans un nouveau dépôt
 
 ## Assistant IA
 
@@ -43,10 +40,7 @@ Pour Ollama : lancez `OLLAMA_HOST=0.0.0.0 ollama serve`, téléchargez un modèl
 (`ollama pull llama3.2`) et mettez l'adresse IP de l'ordinateur dans les réglages
 (ex. `http://192.168.1.10:11434/v1`). Le téléphone doit être sur le même Wi-Fi.
 
-Chaque clé API est gardée dans le coffre sécurisé du téléphone.
-
-Pour GitHub, crée un jeton personnel (Réglages IA → Codex → « Créer un jeton ») :
-un jeton *classic* avec la case `repo`, ou un jeton *fine-grained* avec « Contents : Read and write ». Avec les modèles gratuits
+Chaque clé API est gardée dans le coffre sécurisé du téléphone. Avec les modèles gratuits
 d'OpenCode Zen, vos requêtes peuvent servir à améliorer ces modèles ; avec Ollama, rien
 ne quitte votre réseau.
 
@@ -101,9 +95,7 @@ src/ui/Markdown.tsx           Affichage du Markdown et des blocs de code
 src/ui/Coloration.tsx         Coloration syntaxique du code
 src/ui/Studio.tsx             Aperçu en direct des pages HTML
 src/ia/pieces.ts              Photos et fichiers joints (bouton +)
-src/ia/github.ts              GitHub : import, dépôts, commit + push
-src/ui/Explorateur.tsx        Explorateur de fichiers du Codex (panneaux repliables)
-src/ecrans/EnvoiGithub.tsx    Écran d'envoi sur GitHub
+src/ia/github.ts              Import d'un dépôt GitHub dans le Codex
 src/ia/                       Fournisseurs d'IA, réglages, appels (OpenAI et Anthropic)
 src/hooks/useTaches.ts        État des tâches + sauvegarde (AsyncStorage)
 src/theme.ts                  Couleurs clair / sombre

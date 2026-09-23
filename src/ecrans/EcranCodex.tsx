@@ -3,9 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -15,20 +13,20 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Clipboard from 'expo-clipboard';
 
 import { nouvelId, usePersistant } from '../hooks/usePersistant';
 import { FOURNISSEURS } from '../ia/fournisseurs';
-import { importerDepot } from '../ia/github';
+import { changementsDuProjet, importerDepot, listerDepots, type Depot } from '../ia/github';
 import type { PieceJointe } from '../ia/pieces';
-import { useConnexion } from '../ia/ReglagesContexte';
+import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
-import type { Fichier, Projet } from '../types';
-import { CodeColore } from '../ui/Coloration';
+import type { Fichier, LienGithub, Projet } from '../types';
 import { Discussion, type Raccourci } from '../ui/Discussion';
 import { Entete, PuceIA } from '../ui/Entete';
+import { Explorateur } from '../ui/Explorateur';
 import { blocsAvecFichier, POLICE_CODE, type BlocCode } from '../ui/Markdown';
 import { assemblerHTML, pagePrincipale, Studio } from '../ui/Studio';
+import { EnvoiGithub } from './EnvoiGithub';
 
 /** Taille du projet envoyée à l'IA (Claude accepte beaucoup plus de contexte). */
 function limiteContexte(fournisseur: string) {
@@ -105,7 +103,7 @@ export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
   const modifier = (id: string, f: (p: Projet) => Projet) =>
     setProjets((prev) => prev.map((p) => (p.id === id ? { ...f(p), majLe: Date.now() } : p)));
 
-  const creer = (nom: string, description: string, fichiers: Fichier[] = []) => {
+  const creer = (nom: string, description: string, fichiers: Fichier[] = [], github?: LienGithub) => {
     const maintenant = Date.now();
     const p: Projet = {
       id: nouvelId(),
@@ -113,6 +111,7 @@ export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
       description: description.trim(),
       fichiers,
       messages: [],
+      ...(github ? { github } : {}),
       creeLe: maintenant,
       majLe: maintenant,
     };
@@ -193,11 +192,14 @@ function VueProjet({
   onRetour: () => void;
   onModifier: (f: (p: Projet) => Projet) => void;
 }) {
-  const [onglet, setOnglet] = useState<'discussion' | 'fichiers'>('discussion');
-  const [fichierOuvert, setFichierOuvert] = useState<string | null>(null);
+  const [onglet, setOnglet] = useState<'discussion' | 'code'>('discussion');
   const [studio, setStudio] = useState<{ html: string; titre: string } | null>(null);
+  const [envoi, setEnvoi] = useState(false);
+  const [maj, setMaj] = useState<string | null>(null);
   const connexion = useConnexion('codex');
-  const chemins = p.fichiers.map((f) => f.chemin);
+  const { reglages, ouvrirReglages } = useReglagesIA();
+  const contenus = useMemo(() => Object.fromEntries(p.fichiers.map((f) => [f.chemin, f.contenu])), [p.fichiers]);
+  const changements = useMemo(() => (p.github ? changementsDuProjet(p) : []), [p]);
   const page = pagePrincipale(p.fichiers);
 
   const ouvrirStudio = (b?: BlocCode) => {
@@ -210,35 +212,67 @@ function VueProjet({
     }
   };
 
-  const importer = (pieces: PieceJointe[]) =>
-    enregistrer(pieces.map((x) => ({ langage: '', chemin: x.nom, code: x.texte ?? '', complet: true })));
-
-  const enregistrer = (blocs: BlocCode[]) =>
+  /** Crée ou remplace des fichiers (en gardant leur version GitHub d'origine pour voir les changements). */
+  const enregistrer = (blocs: { chemin: string; code: string }[]) =>
     onModifier((proj) => {
       const fichiers = [...proj.fichiers];
       for (const b of blocs) {
         const i = fichiers.findIndex((f) => f.chemin === b.chemin);
-        const nouveau: Fichier = { chemin: b.chemin, contenu: b.code, majLe: Date.now() };
-        if (i >= 0) fichiers[i] = nouveau;
-        else fichiers.push(nouveau);
+        if (i >= 0) fichiers[i] = { ...fichiers[i], contenu: b.code, majLe: Date.now() };
+        else fichiers.push({ chemin: b.chemin, contenu: b.code, majLe: Date.now() });
       }
-      fichiers.sort((a, b) => a.chemin.localeCompare(b.chemin));
+      fichiers.sort((x, y) => x.chemin.localeCompare(y.chemin));
       return { ...proj, fichiers };
     });
+
+  const supprimer = (chemin: string) =>
+    onModifier((proj) => {
+      const f = proj.fichiers.find((x) => x.chemin === chemin);
+      const supprimes = f?.origine !== undefined ? [...new Set([...(proj.supprimes ?? []), chemin])] : proj.supprimes;
+      return { ...proj, supprimes, fichiers: proj.fichiers.filter((x) => x.chemin !== chemin) };
+    });
+
+  const importer = (pieces: PieceJointe[]) => enregistrer(pieces.map((x) => ({ chemin: x.nom, code: x.texte ?? '' })));
 
   const exporter = () => {
     const texte = p.fichiers.map((f) => `===== ${f.chemin} =====\n${f.contenu}`).join('\n\n');
     Share.share({ title: p.nom, message: texte || '(projet vide)' }).catch(() => {});
   };
 
-  const fichier = p.fichiers.find((f) => f.chemin === fichierOuvert) ?? null;
+  const mettreAJour = () => {
+    if (!p.github) return;
+    const lancer = async () => {
+      setMaj('Téléchargement depuis GitHub…');
+      try {
+        const { proprio, depot, branche } = p.github!;
+        const r = await importerDepot(`github.com/${proprio}/${depot}/tree/${branche}`, reglages.jetonGithub, (fait, total) =>
+          setMaj(`Téléchargement ${fait} / ${total} fichiers…`),
+        );
+        onModifier((proj) => ({ ...proj, fichiers: r.fichiers, github: r.lien, supprimes: [] }));
+        setMaj(null);
+      } catch (e) {
+        setMaj(null);
+        Alert.alert('Mise à jour impossible', (e as Error).message);
+      }
+    };
+    if (changements.length) {
+      Alert.alert(
+        'Remplacer tes changements ?',
+        `Tu as ${changements.length} changement(s) pas encore envoyé(s). La version de GitHub va les remplacer.`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Remplacer', style: 'destructive', onPress: lancer },
+        ],
+      );
+    } else lancer();
+  };
 
   return (
     <View style={styles.flex}>
       <Entete
         couleurs={c}
         titre={p.nom}
-        sousTitre={`Projet Codex · ${p.fichiers.length} fichier${p.fichiers.length > 1 ? 's' : ''}`}
+        sousTitre={p.github ? `⎇ ${p.github.proprio}/${p.github.depot} · ${p.github.branche}` : `Projet local · ${p.fichiers.length} fichier${p.fichiers.length > 1 ? 's' : ''}`}
         onRetour={onRetour}
         droite={
           <View style={styles.enteteDroite}>
@@ -256,8 +290,36 @@ function VueProjet({
           </View>
         }
       />
+
+      {/* Barre GitHub */}
+      <View style={[styles.barreGithub, { borderColor: c.bordure, backgroundColor: c.carte }]}>
+        <Text style={[styles.texteGithub, { color: c.texte }]} numberOfLines={1}>
+          {maj ?? (p.github ? (changements.length ? `${changements.length} changement${changements.length > 1 ? 's' : ''} à envoyer` : 'À jour avec GitHub ✓') : 'Pas encore sur GitHub')}
+        </Text>
+        {maj ? (
+          <ActivityIndicator color={c.accentTexte} />
+        ) : (
+          <View style={styles.actionsGithub}>
+            {p.github && (
+              <Pressable onPress={mettreAJour} hitSlop={6} accessibilityLabel="Mettre à jour depuis GitHub" style={[styles.boutonGithub, { borderColor: c.bordure }]}>
+                <Text style={{ color: c.texte, fontWeight: '700', fontSize: 13 }}>⬇ Tirer</Text>
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => (reglages.jetonGithub.trim() ? setEnvoi(true) : ouvrirReglages('codex'))}
+              accessibilityLabel={p.github ? 'Envoyer sur GitHub' : 'Publier sur GitHub'}
+              style={[styles.boutonGithub, { backgroundColor: c.accent, borderColor: c.accent }]}
+            >
+              <Text style={{ color: c.surAccent, fontWeight: '800', fontSize: 13 }}>
+                {p.github ? `⬆ Pousser${changements.length ? ` (${changements.length})` : ''}` : '⬆ Publier'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
       <View style={[styles.segments, { borderColor: c.bordure }]}>
-        {(['discussion', 'fichiers'] as const).map((o) => {
+        {(['discussion', 'code'] as const).map((o) => {
           const actif = onglet === o;
           return (
             <Pressable
@@ -268,14 +330,14 @@ function VueProjet({
               style={[styles.segment, actif && { backgroundColor: c.accent }]}
             >
               <Text style={{ color: actif ? c.surAccent : c.texte, fontWeight: '700' }}>
-                {o === 'discussion' ? 'Discussion' : `Fichiers (${p.fichiers.length})`}
+                {o === 'discussion' ? '💬 Discussion' : `</> Code (${p.fichiers.length})`}
               </Text>
             </Pressable>
           );
         })}
       </View>
 
-      {onglet === 'discussion' ? (
+      <View style={[styles.flex, onglet !== 'discussion' && styles.cache]}>
         <Discussion
           couleurs={c}
           espace="codex"
@@ -287,13 +349,17 @@ function VueProjet({
           onImporterDansProjet={importer}
           placeholder="Décris ce que tu veux coder…"
           onMessages={(messages) => onModifier((proj) => ({ ...proj, messages }))}
-          onEnregistrerFichier={(b) => enregistrer([b])}
-          fichiersExistants={chemins}
-          suggestions={p.fichiers.length ? [] : [
-            'Crée une page web simple avec un bouton orange',
-            'Écris un script Python qui renomme des photos par date',
-            'Explique-moi la structure de ce projet',
-          ]}
+          onEnregistrerFichier={(b) => enregistrer([{ chemin: b.chemin, code: b.code }])}
+          fichiersExistants={contenus}
+          suggestions={
+            p.fichiers.length
+              ? []
+              : [
+                  'Crée une page web simple avec un bouton orange',
+                  'Écris un script Python qui renomme des photos par date',
+                  'Crée une petite appli de notes en HTML, CSS et JavaScript',
+                ]
+          }
           accueil={
             <View style={{ gap: 6, marginBottom: 6 }}>
               <Text style={[styles.accueil, { color: c.texte }]}>
@@ -312,7 +378,7 @@ function VueProjet({
             if (blocs.length < 2) return null;
             return (
               <Pressable
-                onPress={() => enregistrer(blocs)}
+                onPress={() => enregistrer(blocs.map((b) => ({ chemin: b.chemin, code: b.code })))}
                 style={({ pressed }) => [styles.boutonSecondaire, { borderColor: c.accent, opacity: pressed ? 0.7 : 1 }]}
               >
                 <Text style={{ color: c.accentTexte, fontWeight: '700' }}>Enregistrer les {blocs.length} fichiers</Text>
@@ -320,176 +386,37 @@ function VueProjet({
             );
           }}
         />
-      ) : (
-        <FlatList
-          data={p.fichiers}
-          keyExtractor={(f) => f.chemin}
-          contentContainerStyle={styles.liste}
-          ListHeaderComponent={
-            p.fichiers.length ? (
-              <Pressable onPress={exporter} style={styles.lienExporter}>
-                <Text style={{ color: c.accentTexte, fontWeight: '700' }}>Partager tout le projet →</Text>
-              </Pressable>
-            ) : null
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => setFichierOuvert(item.chemin)}
-              style={({ pressed }) => [styles.ligne, { backgroundColor: c.carte, borderColor: c.bordure, opacity: pressed ? 0.8 : 1 }]}
-            >
-              <View style={styles.flex}>
-                <Text numberOfLines={1} style={[styles.chemin, { color: c.texte }]}>
-                  {item.chemin}
-                </Text>
-                <Text style={{ color: c.texteDoux, fontSize: 13 }}>
-                  {item.contenu.split('\n').length} ligne{item.contenu.split('\n').length > 1 ? 's' : ''} · {new Date(item.majLe).toLocaleString('fr-CA')}
-                </Text>
-              </View>
+      </View>
+
+      {onglet === 'code' && (
+        <View style={styles.flex}>
+          <Explorateur
+            fichiers={p.fichiers}
+            couleurs={c}
+            changements={changements}
+            onSauver={(chemin, contenu) => enregistrer([{ chemin, code: contenu }])}
+            onSupprimer={supprimer}
+            onStudio={(f) => setStudio({ html: assemblerHTML(f.contenu, f.chemin, p.fichiers), titre: f.chemin })}
+            onNouveau={(chemin) => {
+              if (!contenus[chemin]) enregistrer([{ chemin, code: '' }]);
+            }}
+          />
+          {p.fichiers.length > 0 && (
+            <Pressable onPress={exporter} style={[styles.lienExporter, { borderColor: c.bordure }]}>
+              <Text style={{ color: c.accentTexte, fontWeight: '700' }}>Partager tout le projet (texte) →</Text>
             </Pressable>
           )}
-          ListEmptyComponent={
-            <Text style={[styles.vide, { color: c.texteDoux }]}>
-              Aucun fichier. Dans la discussion, touche « Enregistrer » sur un bloc de code.
-            </Text>
-          }
-        />
+        </View>
       )}
 
-      <VueFichier
-        fichier={fichier}
+      <EnvoiGithub
+        projet={envoi ? p : null}
         couleurs={c}
-        onFermer={() => setFichierOuvert(null)}
-        onSauver={(contenu) =>
-          onModifier((proj) => ({
-            ...proj,
-            fichiers: proj.fichiers.map((f) => (f.chemin === fichierOuvert ? { ...f, contenu, majLe: Date.now() } : f)),
-          }))
-        }
-        onSupprimer={() => {
-          onModifier((proj) => ({ ...proj, fichiers: proj.fichiers.filter((f) => f.chemin !== fichierOuvert) }));
-          setFichierOuvert(null);
-        }}
-        onStudio={
-          fichier && /\.html?$/i.test(fichier.chemin)
-            ? () => {
-                setFichierOuvert(null);
-                setStudio({ html: assemblerHTML(fichier.contenu, fichier.chemin, p.fichiers), titre: fichier.chemin });
-              }
-            : undefined
-        }
+        onFermer={() => setEnvoi(false)}
+        onSynchronise={(nouveau) => onModifier(() => nouveau)}
       />
       <Studio html={studio?.html ?? null} titre={studio?.titre ?? ''} couleurs={c} onFermer={() => setStudio(null)} />
     </View>
-  );
-}
-
-function VueFichier({
-  fichier,
-  couleurs: c,
-  onFermer,
-  onSauver,
-  onSupprimer,
-  onStudio,
-}: {
-  fichier: Fichier | null;
-  couleurs: Couleurs;
-  onFermer: () => void;
-  onSauver: (contenu: string) => void;
-  onSupprimer: () => void;
-  onStudio?: () => void;
-}) {
-  const [edition, setEdition] = useState<string | null>(null);
-  const [copie, setCopie] = useState(false);
-
-  const fermer = () => {
-    setEdition(null);
-    onFermer();
-  };
-
-  if (!fichier) return null;
-
-  return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={fermer}>
-      <SafeAreaView style={[styles.flex, { backgroundColor: c.fond }]}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.barre}>
-            <Pressable onPress={fermer} hitSlop={12}>
-              <Text style={[styles.lien, { color: c.accentTexte }]}>Fermer</Text>
-            </Pressable>
-            <Text numberOfLines={1} style={[styles.titreBarre, { color: c.texte, fontFamily: POLICE_CODE }]}>
-              {fichier.chemin}
-            </Text>
-            <Pressable
-              hitSlop={12}
-              onPress={() => {
-                if (edition === null) setEdition(fichier.contenu);
-                else {
-                  onSauver(edition);
-                  setEdition(null);
-                }
-              }}
-            >
-              <Text style={[styles.lien, { color: c.accentTexte }]}>{edition === null ? 'Modifier' : 'Enregistrer'}</Text>
-            </Pressable>
-          </View>
-
-          {edition === null ? (
-            <ScrollView style={styles.flex} contentContainerStyle={styles.marges}>
-              <ScrollView horizontal>
-                <Text selectable style={[styles.code, { color: c.code.texte }]}>
-                  <CodeColore code={fichier.contenu} langage="" chemin={fichier.chemin} couleurs={c} />
-                </Text>
-              </ScrollView>
-            </ScrollView>
-          ) : (
-            <TextInput
-              value={edition}
-              onChangeText={setEdition}
-              multiline
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              style={[styles.code, styles.editeur, { color: c.texte, backgroundColor: c.carte, borderColor: c.bordure }]}
-            />
-          )}
-
-          <View style={[styles.actions, { borderColor: c.bordure }]}>
-            {onStudio && (
-              <Pressable onPress={onStudio} style={[styles.boutonAction, { backgroundColor: c.accent }]}>
-                <Text style={[styles.texteBouton, { color: c.surAccent }]}>▶ Studio</Text>
-              </Pressable>
-            )}
-            <Pressable
-              onPress={async () => {
-                await Clipboard.setStringAsync(fichier.contenu);
-                setCopie(true);
-                setTimeout(() => setCopie(false), 1500);
-              }}
-              style={[styles.boutonAction, { backgroundColor: c.accent }]}
-            >
-              <Text style={[styles.texteBouton, { color: c.surAccent }]}>{copie ? 'Copié ✓' : 'Copier'}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => Share.share({ title: fichier.chemin, message: fichier.contenu }).catch(() => {})}
-              style={[styles.boutonAction, { backgroundColor: c.accent }]}
-            >
-              <Text style={[styles.texteBouton, { color: c.surAccent }]}>Partager</Text>
-            </Pressable>
-            <Pressable
-              onPress={() =>
-                Alert.alert('Supprimer ce fichier ?', fichier.chemin, [
-                  { text: 'Annuler', style: 'cancel' },
-                  { text: 'Supprimer', style: 'destructive', onPress: onSupprimer },
-                ])
-              }
-              style={[styles.boutonAction, { borderColor: c.danger, borderWidth: 1 }]}
-            >
-              <Text style={[styles.texteBouton, { color: c.danger }]}>Supprimer</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </Modal>
   );
 }
 
@@ -502,13 +429,17 @@ function NouveauProjet({
   visible: boolean;
   couleurs: Couleurs;
   onFermer: () => void;
-  onCreer: (nom: string, description: string, fichiers?: Fichier[]) => void;
+  onCreer: (nom: string, description: string, fichiers?: Fichier[], github?: LienGithub) => void;
 }) {
+  const { reglages, ouvrirReglages } = useReglagesIA();
+  const jeton = reglages.jetonGithub;
   const [mode, setMode] = useState<'vide' | 'github'>('vide');
+  const [depots, setDepots] = useState<Depot[] | null>(null);
+  const [chargementDepots, setChargementDepots] = useState(false);
+  const [filtre, setFiltre] = useState('');
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [adresse, setAdresse] = useState('');
-  const [jeton, setJeton] = useState('');
   const [progres, setProgres] = useState<string | null>(null);
   const [erreur, setErreur] = useState('');
   const champ = [styles.champ, { backgroundColor: c.carte, borderColor: c.bordure, color: c.texte }];
@@ -517,7 +448,7 @@ function NouveauProjet({
     setNom('');
     setDescription('');
     setAdresse('');
-    setJeton('');
+    setFiltre('');
     setErreur('');
     setProgres(null);
   };
@@ -534,7 +465,7 @@ function NouveauProjet({
     setProgres('Lecture du dépôt…');
     try {
       const r = await importerDepot(adresse, jeton, (fait, total) => setProgres(`Téléchargement ${fait} / ${total} fichiers…`));
-      onCreer(nom.trim() || r.nom, r.description, r.fichiers);
+      onCreer(nom.trim() || r.nom, r.description, r.fichiers, r.lien);
       reinitialiser();
     } catch (e) {
       setErreur((e as Error).message);
@@ -543,6 +474,21 @@ function NouveauProjet({
   };
 
   const pret = mode === 'vide' ? !!nom.trim() : !!adresse.trim() && !progres;
+
+  const chargerDepots = async () => {
+    if (!jeton.trim() || chargementDepots) return;
+    setChargementDepots(true);
+    setErreur('');
+    try {
+      setDepots(await listerDepots(jeton));
+    } catch (e) {
+      setErreur((e as Error).message);
+    } finally {
+      setChargementDepots(false);
+    }
+  };
+
+  const depotsFiltres = (depots ?? []).filter((d) => d.nomComplet.toLowerCase().includes(filtre.trim().toLowerCase()));
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onFermer}>
@@ -576,6 +522,72 @@ function NouveauProjet({
 
           {mode === 'github' && (
             <>
+              {jeton.trim() ? (
+                <>
+                  <View style={styles.ligneMesDepots}>
+                    <Text style={[styles.etiquette, { color: c.texteDoux }]}>MES DÉPÔTS</Text>
+                    <Pressable onPress={chargerDepots} hitSlop={8}>
+                      <Text style={{ color: c.accentTexte, fontWeight: '700' }}>
+                        {depots ? '↻ Actualiser' : 'Afficher mes dépôts'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  {chargementDepots && <ActivityIndicator color={c.accentTexte} />}
+                  {depots && (
+                    <>
+                      <TextInput
+                        value={filtre}
+                        onChangeText={setFiltre}
+                        placeholder="Chercher un dépôt…"
+                        placeholderTextColor={c.texteDoux}
+                        autoCapitalize="none"
+                        style={champ}
+                      />
+                      <View style={[styles.listeDepots, { borderColor: c.bordure, backgroundColor: c.carte }]}>
+                        {depotsFiltres.slice(0, 30).map((d) => {
+                          const choisi = adresse === `github.com/${d.nomComplet}`;
+                          return (
+                            <Pressable
+                              key={d.nomComplet}
+                              onPress={() => setAdresse(`github.com/${d.nomComplet}`)}
+                              style={[styles.ligneDepot, choisi && { backgroundColor: c.fond }]}
+                            >
+                              <Text style={{ fontSize: 15 }}>{d.prive ? '🔒' : '📦'}</Text>
+                              <View style={styles.flex}>
+                                <Text numberOfLines={1} style={{ color: c.texte, fontWeight: choisi ? '800' : '600', fontFamily: POLICE_CODE, fontSize: 14 }}>
+                                  {d.nomComplet}
+                                </Text>
+                                {!!d.description && (
+                                  <Text numberOfLines={1} style={{ color: c.texteDoux, fontSize: 12 }}>
+                                    {d.description}
+                                  </Text>
+                                )}
+                              </View>
+                              {choisi && <Text style={{ color: c.accentTexte, fontWeight: '900' }}>✓</Text>}
+                            </Pressable>
+                          );
+                        })}
+                        {!depotsFiltres.length && (
+                          <Text style={{ color: c.texteDoux, padding: 12 }}>Aucun dépôt trouvé.</Text>
+                        )}
+                      </View>
+                    </>
+                  )}
+                </>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    onFermer();
+                    ouvrirReglages('codex');
+                  }}
+                  style={[styles.boutonSecondaire, { borderColor: c.accent, alignSelf: 'stretch' }]}
+                >
+                  <Text style={{ color: c.accentTexte, fontWeight: '700', lineHeight: 20 }}>
+                    Ajoute ton jeton GitHub (Réglages IA → Codex) pour voir tes dépôts, même privés, et envoyer tes changements →
+                  </Text>
+                </Pressable>
+              )}
+
               <Text style={[styles.etiquette, { color: c.texteDoux }]}>ADRESSE DU DÉPÔT GITHUB</Text>
               <TextInput
                 value={adresse}
@@ -589,19 +601,8 @@ function NouveauProjet({
               />
               <Text style={{ color: c.texteDoux, fontSize: 13, lineHeight: 19 }}>
                 Une branche précise : github.com/proprio/depot/tree/nom-de-branche. Codex lit tous les fichiers texte et
-                code (jusqu’à 200 fichiers) pour comprendre le projet.
+                code (jusqu’à 300 fichiers) pour comprendre le projet au complet.
               </Text>
-              <Text style={[styles.etiquette, { color: c.texteDoux }]}>JETON GITHUB (DÉPÔT PRIVÉ, FACULTATIF)</Text>
-              <TextInput
-                value={jeton}
-                onChangeText={setJeton}
-                placeholder="ghp_…"
-                placeholderTextColor={c.texteDoux}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-                style={champ}
-              />
             </>
           )}
 
@@ -652,6 +653,25 @@ function NouveauProjet({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  cache: { display: 'none' },
+  ligneMesDepots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  listeDepots: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, overflow: 'hidden' },
+  ligneDepot: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  barreGithub: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  texteGithub: { flex: 1, fontSize: 13, fontWeight: '700' },
+  actionsGithub: { flexDirection: 'row', gap: 6 },
+  boutonGithub: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   enteteDroite: { alignItems: 'flex-end', gap: 6 },
   boutonStudio: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   marges: { paddingHorizontal: 20, paddingBottom: 14 },
@@ -674,7 +694,7 @@ const styles = StyleSheet.create({
   vide: { textAlign: 'center', marginTop: 40, fontSize: 15, lineHeight: 22 },
   segments: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 8, borderWidth: 1, borderRadius: 999, padding: 3 },
   segment: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 999 },
-  lienExporter: { paddingVertical: 6 },
+  lienExporter: { paddingVertical: 12, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth },
   barre: {
     flexDirection: 'row',
     justifyContent: 'space-between',

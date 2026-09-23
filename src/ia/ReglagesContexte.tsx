@@ -14,6 +14,7 @@ import {
 
 const CLE_REGLAGES = 'marceau:ia';
 const cleSecrete = (id: IdFournisseur) => `marceau-ia-cle-${id}`;
+const CLE_GITHUB = 'marceau-github-jeton';
 
 type Contexte = {
   reglages: ReglagesIA;
@@ -50,6 +51,7 @@ export function ReglagesIAProvider({
           actif: ORDRE_FOURNISSEURS.includes(lu.actif) ? lu.actif : defaut.actif,
           actifCodex: ORDRE_FOURNISSEURS.includes(lu.actifCodex) ? lu.actifCodex : defaut.actifCodex,
           configs: { ...defaut.configs },
+          jetonGithub: (await SecureStore.getItemAsync(CLE_GITHUB).catch(() => null)) ?? '',
         };
         for (const id of ORDRE_FOURNISSEURS) {
           const cle = (await SecureStore.getItemAsync(cleSecrete(id)).catch(() => null)) ?? '';
@@ -74,6 +76,8 @@ export function ReglagesIAProvider({
       ),
     };
     await AsyncStorage.setItem(CLE_REGLAGES, JSON.stringify(sansCles)).catch(() => {});
+    if (r.jetonGithub.trim()) await SecureStore.setItemAsync(CLE_GITHUB, r.jetonGithub.trim()).catch(() => {});
+    else await SecureStore.deleteItemAsync(CLE_GITHUB).catch(() => {});
     for (const id of ORDRE_FOURNISSEURS) {
       const cle = r.configs[id].cle.trim();
       if (cle) await SecureStore.setItemAsync(cleSecrete(id), cle).catch(() => {});

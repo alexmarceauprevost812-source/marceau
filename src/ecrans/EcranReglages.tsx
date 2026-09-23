@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { listerModeles } from '../ia/client';
+import { utilisateurGithub } from '../ia/github';
 import { FOURNISSEURS, ORDRE_FOURNISSEURS, type Espace, type IdFournisseur, type ReglagesIA } from '../ia/fournisseurs';
 import { useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
@@ -29,6 +30,8 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
   const [chargement, setChargement] = useState(false);
   const [message, setMessage] = useState('');
   const [espace, setEspace] = useState<Espace>(espaceInitial);
+  const [testGithub, setTestGithub] = useState<{ ok: boolean; texte: string } | null>(null);
+  const [testEnCours, setTestEnCours] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -36,6 +39,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
       setModeles(null);
       setMessage('');
       setEspace(espaceInitial);
+      setTestGithub(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -64,6 +68,19 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
       setMessage((e as Error).message);
     } finally {
       setChargement(false);
+    }
+  };
+
+  const testerGithub = async () => {
+    setTestEnCours(true);
+    setTestGithub(null);
+    try {
+      const login = await utilisateurGithub(brouillon.jetonGithub);
+      setTestGithub({ ok: true, texte: `Connecté à GitHub : ${login} ✓` });
+    } catch (e) {
+      setTestGithub({ ok: false, texte: (e as Error).message });
+    } finally {
+      setTestEnCours(false);
     }
   };
 
@@ -219,6 +236,56 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
               style={champ}
               accessibilityLabel="Adresse du serveur"
             />
+
+            {espace === 'codex' && (
+              <>
+                <Text style={[styles.etiquette, { color: c.texteDoux }]}>JETON GITHUB (LIRE ET ÉCRIRE TES PROJETS)</Text>
+                <TextInput
+                  value={brouillon.jetonGithub}
+                  onChangeText={(v) => {
+                    setBrouillon({ ...brouillon, jetonGithub: v });
+                    setTestGithub(null);
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                  placeholder="ghp_… ou github_pat_…"
+                  placeholderTextColor={c.texteDoux}
+                  style={champ}
+                  accessibilityLabel="Jeton GitHub"
+                />
+                <View style={styles.ligneLien}>
+                  <Pressable
+                    onPress={testerGithub}
+                    disabled={!brouillon.jetonGithub.trim() || testEnCours}
+                    accessibilityRole="button"
+                    style={styles.ligneLien}
+                  >
+                    {testEnCours && <ActivityIndicator color={c.accentTexte} />}
+                    <Text style={[styles.lien, { color: c.accentTexte, opacity: brouillon.jetonGithub.trim() ? 1 : 0.5 }]}>
+                      Tester le jeton
+                    </Text>
+                  </Pressable>
+                  <Text style={{ color: c.texteDoux }}>·</Text>
+                  <Pressable
+                    onPress={() => Linking.openURL('https://github.com/settings/tokens/new?scopes=repo&description=Marceau%20Codex')}
+                    accessibilityRole="link"
+                  >
+                    <Text style={[styles.lien, { color: c.accentTexte }]}>Créer un jeton →</Text>
+                  </Pressable>
+                </View>
+                {testGithub && (
+                  <Text style={{ color: testGithub.ok ? c.texte : c.danger, fontSize: 14, fontWeight: '600' }}>
+                    {testGithub.texte}
+                  </Text>
+                )}
+                <Text style={[styles.aide, { color: c.texteDoux }]}>
+                  Avec ce jeton, le Codex voit tes dépôts (même privés), les lit au complet et envoie tes changements
+                  (commit + push). Crée un jeton « classic » avec la case « repo », ou un jeton « fine-grained » avec
+                  « Contents : Read and write ». Il reste dans le coffre sécurisé du téléphone.
+                </Text>
+              </>
+            )}
 
             <Pressable onPress={sauver} accessibilityRole="button" style={[styles.bouton, { backgroundColor: c.accent }]}>
               <Text style={[styles.texteBouton, { color: c.surAccent }]}>Enregistrer</Text>

@@ -87,7 +87,7 @@ export function CodeColore({ code, langage, chemin, couleurs }: { code: string; 
           <Text
             key={i}
             style={{
-              color: couleurs.code[j.g],
+              color: couleurs.code[j.g as keyof Couleurs['code']],
               fontStyle: j.g === 'commentaire' ? 'italic' : 'normal',
               fontWeight: j.g === 'mot' || j.g === 'balise' ? '700' : 'normal',
             }}

@@ -22,6 +22,8 @@ const clair = {
     balise: '#A3144D',
     attribut: '#6B2FB3',
     fonction: '#00605F',
+    ajout: '#1C6B1C',
+    retrait: '#A31E16',
   },
 };
 
@@ -45,6 +47,8 @@ const sombre: typeof clair = {
     balise: '#FF6B9A',
     attribut: '#C49BFF',
     fonction: '#7DF9C4',
+    ajout: '#7DF9C4',
+    retrait: '#FF5A4E',
   },
 };
 
