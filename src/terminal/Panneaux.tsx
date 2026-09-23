@@ -16,6 +16,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { Terminal, type InfosTerminal, type OptionsSsh } from '../../modules/marceau-terminal';
 import type { Couleurs } from '../theme';
+import { AideLinux } from './AideLinux';
 import { BarreTouches } from './BarreTouches';
 import { VueTerminal, type PoigneeTerminal, type Theme } from './VueTerminal';
 
@@ -205,15 +206,20 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
     );
   }
 
+  return <LinuxPret couleurs={c} />;
+}
+
+/** Terminal Linux prêt, avec la barre d'aide (commandes et catalogue). */
+function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
+  const [aide, setAide] = useState(false);
   return (
     <View style={styles.flex}>
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
-        <Text style={[styles.petit, { color: c.texteDoux, flex: 1 }]} numberOfLines={2}>
-          Catalogue d'outils Kali (doc officielle) : lis ce que fait chaque commande avant de la lancer.
-        </Text>
-        <Bouton couleurs={c} libelle="📖 Outils" compact secondaire onPress={() => Linking.openURL(LIEN_KALI)} />
+        <Bouton couleurs={c} libelle="📖 Commandes" compact secondaire onPress={() => setAide(true)} />
+        <Bouton couleurs={c} libelle="🧰 Outils Kali" compact secondaire onPress={() => Linking.openURL(LIEN_KALI)} />
       </View>
       <SessionPty couleurs={c} type="linux" />
+      <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
     </View>
   );
 }
