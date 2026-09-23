@@ -213,12 +213,16 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
 // ---------------------------------------------------------------------------
 
 const MAISON_TERMUX = '/data/data/com.termux/files/home';
+/** Numéro du shell de la commande en cours, pour pouvoir l'interrompre (Ctrl+C). */
+const PID_TERMUX = '/data/data/com.termux/files/usr/tmp/marceau-commande.pid';
 const guillemets = (t: string) => `'${t.replace(/'/g, `'\\''`)}'`;
 
 export function PanneauTermux({ couleurs: c, infos, rafraichir }: Base) {
   const terminal = useRef<PoigneeTerminal>(null);
   const dossier = useRef(MAISON_TERMUX);
   const occupe = useRef(false);
+  // Change à chaque commande : le résultat d'une commande interrompue est ignoré.
+  const numero = useRef(0);
   const [message, setMessage] = useState('');
 
   const invite = useCallback(() => {
@@ -235,10 +239,14 @@ export function PanneauTermux({ couleurs: c, infos, rafraichir }: Base) {
         return;
       }
       occupe.current = true;
+      const moi = ++numero.current;
       // On garde le dossier courant entre les commandes (cd fonctionne).
-      const script = `cd ${guillemets(dossier.current)} 2>/dev/null\n${ligne}\n__c=$?\nprintf '\\036%s' "$PWD"\nexit $__c`;
+      const script =
+        `printf %s $$ > ${PID_TERMUX}\ncd ${guillemets(dossier.current)} 2>/dev/null\n${ligne}\n__c=$?\n` +
+        `rm -f ${PID_TERMUX}\nprintf '\\036%s' "$PWD"\nexit $__c`;
       try {
         const r = await Terminal.termux(script, dossier.current);
+        if (moi !== numero.current) return; // interrompue entre-temps
         let sortie = r.stdout;
         const i = sortie.lastIndexOf('\x1e');
         if (i >= 0) {
@@ -259,14 +267,31 @@ export function PanneauTermux({ couleurs: c, infos, rafraichir }: Base) {
           terminal.current?.ecrire(GRIS(`[code ${r.code}]\n`));
         }
       } catch (e) {
+        if (moi !== numero.current) return;
         terminal.current?.ecrire(ROUGE(`${(e as Error).message}\n`));
       } finally {
-        occupe.current = false;
-        invite();
+        if (moi === numero.current) {
+          occupe.current = false;
+          invite();
+        }
       }
     },
     [invite],
   );
+
+  /** Ctrl+C : arrête la commande en cours dans Termux (ping, tail -f…) et rend la main. */
+  const interrompre = useCallback(() => {
+    if (occupe.current && Terminal) {
+      numero.current++;
+      occupe.current = false;
+      const arret =
+        `p=$(cat ${PID_TERMUX} 2>/dev/null); rm -f ${PID_TERMUX}; [ -n "$p" ] || exit 0\n` +
+        `pkill -INT -P "$p"; sleep 1; pkill -KILL -P "$p"; kill -KILL "$p" 2>/dev/null; exit 0`;
+      Terminal.termux(arret, MAISON_TERMUX).catch(() => {});
+      terminal.current?.ecrire(GRIS('(commande interrompue)\n'));
+    }
+    invite();
+  }, [invite]);
 
   if (!infos.termuxInstalle) {
     return (
@@ -330,7 +355,7 @@ export function PanneauTermux({ couleurs: c, infos, rafraichir }: Base) {
           invite();
         }}
         onLigne={executer}
-        onInterrompre={invite}
+        onInterrompre={interrompre}
       />
     </View>
   );
@@ -352,6 +377,8 @@ export function PanneauSsh({ couleurs: c }: Base) {
   const [message, setMessage] = useState('');
   const terminal = useRef<PoigneeTerminal>(null);
   const id = 'ssh';
+  // Numéro de la tentative de connexion : une tentative annulée (Déconnecter) ne touche plus l'écran.
+  const tentative = useRef(0);
 
   useEffect(() => {
     SecureStore.getItemAsync(CLE_SSH)
@@ -397,14 +424,16 @@ export function PanneauSsh({ couleurs: c }: Base) {
           <Text style={[styles.petit, { color: c.texte, flex: 1 }]} numberOfLines={1}>
             {options.utilisateur}@{options.hote}
           </Text>
-          <Bouton couleurs={c} libelle="Déconnecter" compact secondaire onPress={() => { Terminal?.fermer(id); setConnecte(false); }} />
+          <Bouton couleurs={c} libelle="Déconnecter" compact secondaire onPress={() => { tentative.current++; Terminal?.fermer(id); setConnecte(false); }} />
         </View>
         <Console
           couleurs={c}
           terminal={terminal}
           onPret={(colonnes, lignes) => {
             terminal.current?.ecrire(GRIS(`Connexion à ${options.hote}…\r\n`));
+            const essai = ++tentative.current;
             Terminal?.ouvrirSsh(id, options, colonnes, lignes).catch((e: Error) => {
+              if (essai !== tentative.current) return;
               setConnecte(false);
               setMessage(e.message);
             });

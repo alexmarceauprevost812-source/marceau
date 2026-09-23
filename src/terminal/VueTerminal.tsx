@@ -2,7 +2,6 @@ import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'r
 import { StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
-import { XTERM_CSS, XTERM_FIT_JS, XTERM_JS } from './xtermBundle';
 
 /**
  * - « brut »  : chaque touche part tout de suite (vrai terminal : téléphone, Linux, SSH).
@@ -54,6 +53,8 @@ function ansi(hex: string) {
 }
 
 function page(mode: ModeSaisie, t: Theme) {
+  // xterm (~500 Ko) n'est chargé qu'à l'ouverture d'un terminal, pas au démarrage de l'appli.
+  const { XTERM_CSS, XTERM_FIT_JS, XTERM_JS } = require('./xtermBundle') as typeof import('./xtermBundle');
   return `<!doctype html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style>${XTERM_CSS}

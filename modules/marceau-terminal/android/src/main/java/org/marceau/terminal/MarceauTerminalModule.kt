@@ -7,6 +7,7 @@ import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 /**
@@ -22,19 +23,48 @@ class MarceauTerminalModule : Module() {
   private val ctx: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
-  private fun surSortie(id: String, texte: String) {
-    sendEvent("onSortie", mapOf("id" to id, "donnees" to texte))
+  /**
+   * Numéro de la session en cours pour chaque id. Une session remplacée ou fermée peut encore
+   * écrire ou se terminer un peu plus tard : on ignore alors ses messages, pour ne pas
+   * afficher sa sortie ni annoncer la fin de la session qui l'a remplacée.
+   */
+  private val generations = ConcurrentHashMap<String, Long>()
+  private val compteur = AtomicLong(0)
+
+  /** Réserve l'id pour une nouvelle session et ferme l'ancienne. */
+  private fun nouvelleGeneration(id: String): Long {
+    val generation = compteur.incrementAndGet()
+    generations[id] = generation
+    sessions.remove(id)?.fermer()
+    return generation
   }
 
-  private fun surFin(id: String, code: Int) {
-    sessions.remove(id)
-    sendEvent("onFin", mapOf("id" to id, "code" to code))
+  private fun actuelle(id: String, generation: Long) = generations[id] == generation
+
+  private fun surSortie(generation: Long): (String, String) -> Unit = { id: String, texte: String ->
+    if (actuelle(id, generation)) sendEvent("onSortie", mapOf("id" to id, "donnees" to texte))
+  }
+
+  private fun surFin(generation: Long): (String, Int) -> Unit = { id: String, code: Int ->
+    if (generations.remove(id, generation)) {
+      sessions.remove(id)
+      sendEvent("onFin", mapOf("id" to id, "code" to code))
+    }
+  }
+
+  /** Enregistre la session, sauf si elle a été fermée ou remplacée entre-temps. */
+  private fun publier(id: String, generation: Long, session: Session): Boolean {
+    sessions[id] = session
+    if (actuelle(id, generation)) return true
+    sessions.remove(id, session)
+    session.fermer()
+    return false
   }
 
   private fun ouvrirPty(id: String, commande: Triple<String, Array<String>, Array<String>>, dossier: String, colonnes: Int, lignes: Int) {
-    sessions.remove(id)?.fermer()
+    val generation = nouvelleGeneration(id)
     val (cmd, args, env) = commande
-    sessions[id] = SessionPty(id, cmd, dossier, args, env, colonnes, lignes, ::surSortie, ::surFin)
+    publier(id, generation, SessionPty(id, cmd, dossier, args, env, colonnes, lignes, surSortie(generation), surFin(generation)))
   }
 
   override fun definition() = ModuleDefinition {
@@ -82,12 +112,16 @@ class MarceauTerminalModule : Module() {
 
     // ---------- Option 3 : SSH ----------
     AsyncFunction("ouvrirSsh") { id: String, options: Map<String, Any?>, colonnes: Int, lignes: Int, promise: Promise ->
+      // La connexion peut durer plusieurs secondes : si l'utilisateur annule (fermer) ou
+      // relance entre-temps, la session obtenue est fermée au lieu d'être publiée.
+      val generation = nouvelleGeneration(id)
       thread(name = "connexion-ssh") {
         try {
-          sessions.remove(id)?.fermer()
-          sessions[id] = SessionSsh(id, ctx, options, colonnes, lignes, ::surSortie, ::surFin)
-          promise.resolve(null)
+          val session = SessionSsh(id, ctx, options, colonnes, lignes, surSortie(generation), surFin(generation))
+          if (publier(id, generation, session)) promise.resolve(null)
+          else promise.reject("ERR_SSH", "Connexion annulée", null)
         } catch (e: Exception) {
+          generations.remove(id, generation)
           promise.reject("ERR_SSH", e.message ?: "Connexion impossible", e)
         }
       }
@@ -107,6 +141,7 @@ class MarceauTerminalModule : Module() {
     }
 
     Function("fermer") { id: String ->
+      generations.remove(id)
       sessions.remove(id)?.fermer()
     }
 
@@ -124,6 +159,7 @@ class MarceauTerminalModule : Module() {
     }
 
     OnDestroy {
+      generations.clear()
       sessions.values.forEach { it.fermer() }
       sessions.clear()
     }
