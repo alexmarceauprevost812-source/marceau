@@ -11,8 +11,32 @@ construite avec [Expo](https://expo.dev) et React Native.
 - Filtres : toutes / à faire / terminées
 - Effacer d'un coup les tâches terminées
 - Sauvegarde locale sur le téléphone (aucun compte, aucune donnée envoyée sur Internet)
-- Thème clair et sombre automatique
+- Thème automatique : jour gris mat avec écriture noire, nuit noire avec écriture blanche, boutons orange
 - Interface en français, accessible (lecteurs d'écran)
+- **Assistant IA gratuit** : décris un objectif, l'IA le découpe en tâches
+- **Chat** : jase avec des IA en 3 modes (Discussion, Écriture, Sujet), réponses en direct, discussions sauvegardées
+- **Codex** : crée des projets de code avec l'IA — les fichiers proposés s'enregistrent dans le projet, se modifient, se copient et se partagent
+
+## Assistant IA
+
+Touchez **✨ IA** dans les tâches, ou ouvrez les onglets **Chat** et **Codex**. L'IA se choisit dans *Réglages IA* (la puce en haut à droite) :
+
+| Fournisseur | Coût | Clé | Où tourne l'IA |
+|---|---|---|---|
+| [OpenCode Zen](https://opencode.ai/docs/zen/) | Modèles gratuits (`big-pickle`, `nemotron-3.5-lightning-free`…) | Gratuite, sur [opencode.ai/auth](https://opencode.ai/auth) | En ligne |
+| [Ollama](https://ollama.com) | Gratuit, modèles open source (Llama, Qwen, Gemma, Mistral) | Aucune | Sur votre ordinateur |
+| [Claude (Anthropic)](https://console.anthropic.com) | Payant à l'usage | Votre clé API Anthropic | En ligne |
+| [OpenAI (Codex)](https://platform.openai.com) | Payant à l'usage | Votre clé API OpenAI | En ligne |
+
+Le bouton « Charger la liste des modèles du serveur » affiche les modèles disponibles à jour.
+
+Pour Ollama : lancez `OLLAMA_HOST=0.0.0.0 ollama serve`, téléchargez un modèle
+(`ollama pull llama3.2`) et mettez l'adresse IP de l'ordinateur dans les réglages
+(ex. `http://192.168.1.10:11434/v1`). Le téléphone doit être sur le même Wi-Fi.
+
+Chaque clé API est gardée dans le coffre sécurisé du téléphone. Avec les modèles gratuits
+d'OpenCode Zen, vos requêtes peuvent servir à améliorer ces modèles ; avec Ollama, rien
+ne quitte votre réseau.
 
 ## Essayer l'application
 
@@ -58,6 +82,11 @@ npx eas-cli@latest build --platform ios --profile production       # iOS
 ```
 App.tsx                       Écran principal
 src/components/ElementTache   Ligne d'une tâche
+src/ecrans/                   Écrans : Tâches, Chat, Codex, Réglages IA
+src/components/AssistantIA    Assistant IA des tâches
+src/ui/Discussion.tsx         Fil de discussion avec réponses en direct
+src/ui/Markdown.tsx           Affichage du Markdown et des blocs de code
+src/ia/                       Fournisseurs d'IA, réglages, appels (OpenAI et Anthropic)
 src/hooks/useTaches.ts        État des tâches + sauvegarde (AsyncStorage)
 src/theme.ts                  Couleurs clair / sombre
 src/types.ts                  Types partagés

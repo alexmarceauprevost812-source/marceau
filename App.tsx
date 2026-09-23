@@ -1,180 +1,81 @@
-import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { ElementTache } from './src/components/ElementTache';
-import { useTaches } from './src/hooks/useTaches';
+import { EcranChat } from './src/ecrans/EcranChat';
+import { EcranCodex } from './src/ecrans/EcranCodex';
+import { EcranReglages } from './src/ecrans/EcranReglages';
+import { EcranTaches } from './src/ecrans/EcranTaches';
+import { ReglagesIAProvider } from './src/ia/ReglagesContexte';
 import { useCouleurs } from './src/theme';
-import type { Filtre } from './src/types';
 
-const FILTRES: { cle: Filtre; libelle: string }[] = [
-  { cle: 'toutes', libelle: 'Toutes' },
-  { cle: 'actives', libelle: 'À faire' },
-  { cle: 'terminees', libelle: 'Terminées' },
+type Onglet = 'taches' | 'chat' | 'codex';
+
+const ONGLETS: { cle: Onglet; icone: string; libelle: string }[] = [
+  { cle: 'taches', icone: '✓', libelle: 'Tâches' },
+  { cle: 'chat', icone: '💬', libelle: 'Chat' },
+  { cle: 'codex', icone: '</>', libelle: 'Codex' },
 ];
 
-function Ecran() {
-  const couleurs = useCouleurs();
-  const { taches, chargement, ajouter, basculer, supprimer, viderTerminees } = useTaches();
-  const [saisie, setSaisie] = useState('');
-  const [filtre, setFiltre] = useState<Filtre>('toutes');
-
-  const visibles = useMemo(() => {
-    if (filtre === 'actives') return taches.filter((t) => !t.terminee);
-    if (filtre === 'terminees') return taches.filter((t) => t.terminee);
-    return taches;
-  }, [taches, filtre]);
-
-  const restantes = taches.filter((t) => !t.terminee).length;
-  const nbTerminees = taches.length - restantes;
-
-  const valider = () => {
-    ajouter(saisie);
-    setSaisie('');
-  };
-
-  return (
-    <SafeAreaView style={[styles.ecran, { backgroundColor: couleurs.fond }]}>
-      <KeyboardAvoidingView
-        style={styles.ecran}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.entete}>
-          <Text style={[styles.titre, { color: couleurs.texte }]}>Marceau</Text>
-          <Text style={[styles.sousTitre, { color: couleurs.texteDoux }]}>
-            {restantes === 0
-              ? 'Rien à faire, profitez-en !'
-              : `${restantes} tâche${restantes > 1 ? 's' : ''} à faire`}
-          </Text>
-        </View>
-
-        <View style={styles.formulaire}>
-          <TextInput
-            value={saisie}
-            onChangeText={setSaisie}
-            onSubmitEditing={valider}
-            placeholder="Ajouter une tâche…"
-            placeholderTextColor={couleurs.texteDoux}
-            returnKeyType="done"
-            submitBehavior="submit"
-            style={[
-              styles.champ,
-              { backgroundColor: couleurs.carte, borderColor: couleurs.bordure, color: couleurs.texte },
-            ]}
-          />
-          <Pressable
-            onPress={valider}
-            disabled={!saisie.trim()}
-            accessibilityRole="button"
-            accessibilityLabel="Ajouter la tâche"
-            style={({ pressed }) => [
-              styles.bouton,
-              { backgroundColor: couleurs.accent, opacity: !saisie.trim() ? 0.4 : pressed ? 0.8 : 1 },
-            ]}
-          >
-            <Text style={[styles.boutonTexte, { color: couleurs.surAccent }]}>+</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.filtres}>
-          {FILTRES.map(({ cle, libelle }) => {
-            const actif = filtre === cle;
-            return (
-              <Pressable
-                key={cle}
-                onPress={() => setFiltre(cle)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: actif }}
-                style={[
-                  styles.puce,
-                  { borderColor: couleurs.bordure },
-                  actif && { backgroundColor: couleurs.accent, borderColor: couleurs.accent },
-                ]}
-              >
-                <Text style={{ color: actif ? couleurs.surAccent : couleurs.texte, fontWeight: '600' }}>
-                  {libelle}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {chargement ? (
-          <ActivityIndicator style={styles.chargement} color={couleurs.accent} />
-        ) : (
-          <FlatList
-            data={visibles}
-            keyExtractor={(t) => t.id}
-            contentContainerStyle={styles.liste}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <ElementTache
-                tache={item}
-                couleurs={couleurs}
-                onBasculer={basculer}
-                onSupprimer={supprimer}
-              />
-            )}
-            ListEmptyComponent={
-              <Text style={[styles.vide, { color: couleurs.texteDoux }]}>
-                {filtre === 'terminees' ? 'Aucune tâche terminée.' : 'Aucune tâche pour le moment.'}
-              </Text>
-            }
-          />
-        )}
-
-        {nbTerminees > 0 && (
-          <Pressable onPress={viderTerminees} style={styles.pied} accessibilityRole="button">
-            <Text style={{ color: couleurs.danger, fontWeight: '600' }}>
-              Effacer les tâches terminées ({nbTerminees})
-            </Text>
-          </Pressable>
-        )}
-      </KeyboardAvoidingView>
-      <StatusBar style="auto" />
-    </SafeAreaView>
-  );
-}
-
 export default function App() {
+  const couleurs = useCouleurs();
+  const [onglet, setOnglet] = useState<Onglet>('taches');
+  const [reglagesOuverts, setReglagesOuverts] = useState(false);
+  const ouvrirReglages = useCallback(() => setReglagesOuverts(true), []);
+
   return (
     <SafeAreaProvider>
-      <Ecran />
+      <ReglagesIAProvider ouvrirReglages={ouvrirReglages}>
+        <SafeAreaView edges={['top', 'left', 'right']} style={[styles.ecran, { backgroundColor: couleurs.fond }]}>
+          {/* Les écrans restent montés pour garder leur état (discussion en cours, etc.) */}
+          <View style={[styles.ecran, onglet !== 'taches' && styles.cache]}>
+            <EcranTaches couleurs={couleurs} />
+          </View>
+          <View style={[styles.ecran, onglet !== 'chat' && styles.cache]}>
+            <EcranChat couleurs={couleurs} />
+          </View>
+          <View style={[styles.ecran, onglet !== 'codex' && styles.cache]}>
+            <EcranCodex couleurs={couleurs} />
+          </View>
+        </SafeAreaView>
+
+        <SafeAreaView edges={['bottom', 'left', 'right']} style={{ backgroundColor: couleurs.carte }}>
+          <View style={[styles.barre, { borderColor: couleurs.bordure }]} accessibilityRole="tablist">
+            {ONGLETS.map(({ cle, icone, libelle }) => {
+              const actif = onglet === cle;
+              return (
+                <Pressable
+                  key={cle}
+                  onPress={() => setOnglet(cle)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: actif }}
+                  accessibilityLabel={libelle}
+                  style={styles.onglet}
+                >
+                  <View style={[styles.pastille, actif && { backgroundColor: couleurs.accent }]}>
+                    <Text style={[styles.icone, { color: actif ? couleurs.surAccent : couleurs.texteDoux }]}>{icone}</Text>
+                  </View>
+                  <Text style={[styles.libelle, { color: actif ? couleurs.texte : couleurs.texteDoux }]}>{libelle}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </SafeAreaView>
+
+        <EcranReglages visible={reglagesOuverts} couleurs={couleurs} onFermer={() => setReglagesOuverts(false)} />
+        <StatusBar style="auto" />
+      </ReglagesIAProvider>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   ecran: { flex: 1 },
-  entete: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
-  titre: { fontSize: 32, fontWeight: '800' },
-  sousTitre: { fontSize: 15, marginTop: 4 },
-  formulaire: { flexDirection: 'row', paddingHorizontal: 20, gap: 10 },
-  champ: {
-    flex: 1,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    fontSize: 16,
-  },
-  bouton: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  boutonTexte: { fontSize: 26, fontWeight: '600', marginTop: -2 },
-  filtres: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingVertical: 16 },
-  puce: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1 },
-  chargement: { marginTop: 40 },
-  liste: { paddingHorizontal: 20, paddingBottom: 24 },
-  vide: { textAlign: 'center', marginTop: 40, fontSize: 15 },
-  pied: { alignItems: 'center', paddingVertical: 14 },
+  cache: { display: 'none' },
+  barre: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 6, paddingBottom: 4 },
+  onglet: { flex: 1, alignItems: 'center', gap: 2 },
+  pastille: { minWidth: 56, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  icone: { fontSize: 16, fontWeight: '800' },
+  libelle: { fontSize: 12, fontWeight: '700' },
 });

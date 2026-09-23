@@ -8,7 +8,13 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "org.marceau.app"
+      "bundleIdentifier": "org.marceau.app",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "Marceau se connecte à Ollama sur ton ordinateur pour utiliser une IA locale."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,10 +36,19 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#4F5BD5",
+          "backgroundColor": "#C4C5C7",
           "dark": {
             "image": "./assets/splash-icon.png",
-            "backgroundColor": "#111218"
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
           }
         }
       ]
