@@ -14,7 +14,7 @@ import {
 import { AssistantIA } from '../components/AssistantIA';
 import { ElementTache } from '../components/ElementTache';
 import { useTaches } from '../hooks/useTaches';
-import { BoutonMenu } from '../navigation/Menu';
+import { BoutonBureau, BoutonMenu } from '../navigation/Menu';
 import type { Couleurs } from '../theme';
 import type { Filtre } from '../types';
 
@@ -66,6 +66,7 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
             >
               <Text style={[styles.boutonIATexte, { color: couleurs.surAccent }]}>✨ IA</Text>
             </Pressable>
+            <BoutonBureau couleurs={couleurs} />
           </View>
           <Text style={[styles.sousTitre, { color: couleurs.texteDoux }]}>
             {restantes === 0

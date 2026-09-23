@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { Animated, Easing, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { IconeBureau } from '../bureau/Bureau';
 import type { Couleurs } from '../theme';
 
 export type Section = 'chat' | 'codex' | 'projet' | 'parametres';
@@ -13,11 +14,34 @@ export const SECTIONS: { cle: Section; icone: string; libelle: string }[] = [
   { cle: 'parametres', icone: '⚙️', libelle: 'Paramètres' },
 ];
 
-const MenuCtx = createContext<{ ouvrirMenu: () => void } | null>(null);
+const MenuCtx = createContext<{ ouvrirMenu: () => void; ouvrirBureau: () => void } | null>(null);
 
-export const MenuProvider = ({ ouvrirMenu, children }: { ouvrirMenu: () => void; children: ReactNode }) => (
-  <MenuCtx.Provider value={{ ouvrirMenu }}>{children}</MenuCtx.Provider>
-);
+export const MenuProvider = ({
+  ouvrirMenu,
+  ouvrirBureau,
+  children,
+}: {
+  ouvrirMenu: () => void;
+  ouvrirBureau: () => void;
+  children: ReactNode;
+}) => <MenuCtx.Provider value={{ ouvrirMenu, ouvrirBureau }}>{children}</MenuCtx.Provider>;
+
+/** Bouton en haut à droite qui ouvre le Bureau (toutes les applications). */
+export function BoutonBureau({ couleurs: c }: { couleurs: Couleurs }) {
+  const menu = useContext(MenuCtx);
+  if (!menu) return null;
+  return (
+    <Pressable
+      onPress={menu.ouvrirBureau}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityLabel="Ouvrir le bureau"
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.9 : 1 }] })}
+    >
+      <IconeBureau couleur={c.texte} />
+    </Pressable>
+  );
+}
 
 /** Bouton ☰ qui ouvre le menu de gauche (à mettre dans les en-têtes). */
 export function BoutonMenu({ couleurs: c }: { couleurs: Couleurs }) {

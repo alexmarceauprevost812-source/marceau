@@ -21,7 +21,7 @@ construite avec [Expo](https://expo.dev) et React Native.
 
 ## Assistant IA
 
-L'application s'ouvre sur le **Chat**. Le menu **☰** en haut à gauche mène au Chat, à **Codex**, à **Projet** (les tâches, avec le bouton **✨ IA**) et aux **Paramètres**. L'IA se choisit dans les Paramètres ou avec la puce en haut à droite :
+L'application s'ouvre sur le **Chat**. Le bouton en haut à droite ouvre le **Bureau**, qui montre toutes les applications (elles s'ajoutent dans `src/bureau/applications.ts`). Le menu **☰** en haut à gauche mène au Chat, à **Codex**, à **Projet** (les tâches, avec le bouton **✨ IA**) et aux **Paramètres**. L'IA se choisit dans les Paramètres ou avec la puce en haut à droite :
 
 | Fournisseur | Coût | Clé | Où tourne l'IA |
 |---|---|---|---|
@@ -69,9 +69,12 @@ dans le terminal.
 2. Créez un jeton sur [expo.dev](https://expo.dev/settings/access-tokens) et ajoutez-le
    au dépôt comme secret `EXPO_TOKEN` (*Settings → Secrets and variables → Actions*).
 
-Ensuite : onglet *Actions* → « Construire l'APK Android » → *Run workflow*. L'APK est
-téléchargeable dans les *artifacts* de l'exécution. Pousser un tag `v*` (ex. `v1.0.0`)
-construit aussi l'APK et le joint à la version GitHub. La clé de signature est créée et
+Ensuite, **chaque déploiement** (push sur `main` ou sur la branche de travail) construit
+un nouvel APK et le publie comme version GitHub `build-N` (on peut aussi le lancer à la
+main : onglet *Actions* → « Construire l'APK Android » → *Run workflow*). L'application
+installée vérifie cette version au démarrage : s'il y en a une plus récente, elle propose
+**Installer**, télécharge l'APK et Android demande de confirmer l'installation. On peut
+aussi vérifier depuis le **Bureau** (bouton en haut à droite) → *Mise à jour*. La clé de signature est créée et
 conservée par EAS au premier build : les APK restent compatibles entre eux et avec les
 builds EAS.
 

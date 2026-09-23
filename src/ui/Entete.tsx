@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FOURNISSEURS, type Espace } from '../ia/fournisseurs';
 import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
-import { BoutonMenu } from '../navigation/Menu';
+import { BoutonBureau, BoutonMenu } from '../navigation/Menu';
 import type { Couleurs } from '../theme';
 
 type Props = {
@@ -36,6 +36,7 @@ export function Entete({ couleurs: c, titre, sousTitre, onRetour, droite }: Prop
           )}
         </View>
         {droite}
+        <BoutonBureau couleurs={c} />
       </View>
     </View>
   );
