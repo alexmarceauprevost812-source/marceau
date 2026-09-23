@@ -173,6 +173,8 @@ export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<stri
   const decodeur = new TextDecoder();
   let tampon = '';
   let texte = '';
+  // Le serveur signale la fin normale de la réponse ([DONE], finish_reason ou message_stop).
+  let fini = false;
   try {
     for (;;) {
       const { done, value } = await lecteur.read();
@@ -181,6 +183,7 @@ export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<stri
       const lignes = tampon.split('\n');
       tampon = lignes.pop() ?? '';
       for (const ligne of lignes) {
+        if (finSSE(ligne, format)) fini = true;
         const morceau = morceauSSE(ligne, format);
         if (morceau) {
           texte += morceau;
@@ -194,12 +197,30 @@ export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<stri
     // Connexion coupée en cours de route : on ne fait pas passer le début pour une réponse complète.
     throw new ReponseInterrompue(texte);
   }
+  if (finSSE(tampon, format)) fini = true;
   const reste = morceauSSE(tampon, format);
   if (reste) {
     texte += reste;
     o.onMorceau?.(texte);
   }
+  // Flux fermé sans marque de fin (serveur, proxy ou réseau) : la réponse est incomplète.
+  if (!fini && texte && !o.signal?.aborted) throw new ReponseInterrompue(texte);
   return texte;
+}
+
+/** true si la ligne SSE annonce la fin normale de la réponse. */
+function finSSE(ligne: string, format: FormatAPI): boolean {
+  const l = ligne.trim();
+  if (!l.startsWith('data:')) return false;
+  const donnees = l.slice(5).trim();
+  if (donnees === '[DONE]') return true;
+  try {
+    const j = JSON.parse(donnees);
+    if (format === 'anthropic') return j.type === 'message_stop';
+    return !!j.choices?.[0]?.finish_reason;
+  } catch {
+    return false;
+  }
 }
 
 function morceauSSE(ligne: string, format: FormatAPI): string {

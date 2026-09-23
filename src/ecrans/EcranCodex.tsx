@@ -20,7 +20,7 @@ import * as Clipboard from 'expo-clipboard';
 import { nouvelId, usePersistant } from '../hooks/usePersistant';
 import { FOURNISSEURS } from '../ia/fournisseurs';
 import { importerDepot } from '../ia/github';
-import type { PieceJointe } from '../ia/pieces';
+import { supprimerPieces, type PieceJointe } from '../ia/pieces';
 import { useConnexion } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 import type { Fichier, Projet } from '../types';
@@ -124,7 +124,15 @@ export function EcranCodex({ couleurs: c }: { couleurs: Couleurs }) {
   const supprimer = (p: Projet) =>
     Alert.alert('Supprimer le projet ?', `« ${p.nom} » et ses ${p.fichiers.length} fichiers seront effacés.`, [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => setProjets((prev) => prev.filter((x) => x.id !== p.id)) },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: () => {
+          // Les photos et PDF joints sont copiés sur le téléphone : on les efface aussi.
+          supprimerPieces(p.messages.flatMap((m) => m.pieces ?? []));
+          setProjets((prev) => prev.filter((x) => x.id !== p.id));
+        },
+      },
     ]);
 
   if (courant) {

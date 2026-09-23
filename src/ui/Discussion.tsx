@@ -81,7 +81,26 @@ export function Discussion({
   const cleManquante = manqueCle(connexion);
   const occupe = echange !== null;
 
-  useEffect(() => () => controleur.current?.abort(), []);
+  // Si on quitte la conversation pendant une réponse, on enregistre l'échange tout de suite
+  // (le composant disparaît avant que la réponse ne soit enregistrée normalement).
+  const enCours = useRef({ echange, recu, final, onMessages });
+  enCours.current = { echange, recu, final, onMessages };
+  useEffect(
+    () => () => {
+      const { echange: e, recu: r, final: f, onMessages: enregistrer } = enCours.current;
+      controleur.current?.abort();
+      if (f) enregistrer(f);
+      else if (e) {
+        const debut = sansReflexion(r).trim();
+        enregistrer(
+          debut
+            ? [...e.historique, { role: 'assistant', content: `${debut}\n\n_(Réponse interrompue : conversation quittée avant la fin.)_` }]
+            : e.historique,
+        );
+      }
+    },
+    [],
+  );
 
   // Quand la réponse est complète ET entièrement affichée, on l'enregistre.
   useEffect(() => {

@@ -48,9 +48,12 @@ async function lire(cle: string): Promise<string | null> {
 
 async function ecrire(cle: string, valeur: string) {
   if (Platform.OS === 'web') return AsyncStorage.setItem(cle, valeur);
-  const f = fichier(cle);
-  if (!f.exists) f.create();
-  f.write(valeur);
+  // On écrit d'abord un fichier temporaire, puis on le renomme : si l'écriture échoue
+  // (stockage plein, appli fermée…), l'ancien fichier reste intact.
+  const tmp = new File(Paths.document, `${cle.replace(/[^\w-]/g, '_')}.json.tmp`);
+  tmp.create({ overwrite: true });
+  tmp.write(valeur);
+  tmp.moveSync(fichier(cle), { overwrite: true });
 }
 
 /** État sauvegardé sur le téléphone, rechargé au démarrage. */
