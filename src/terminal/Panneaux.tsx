@@ -191,7 +191,7 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
       <Info
         couleurs={c}
         titre="Un vrai Linux dans ton téléphone"
-        texte="Marceau peut installer Alpine Linux (environ 4 Mo à télécharger). Tu pourras ensuite ajouter Python, Git, Node.js et des milliers d'autres outils avec la commande apk."
+        texte="Marceau peut installer Alpine Linux (environ 4 Mo à télécharger). Tu pourras ensuite ajouter des milliers d'outils à la demande avec « apk add » (Python, Git, Node.js, nmap, hydra, aircrack-ng…). Tape « outils » dans le terminal pour voir comment faire. Le bouton « 📖 Outils » ouvre le catalogue Kali."
       >
         {installation && (
           <Text style={[styles.corps, { color: c.texte }]}>

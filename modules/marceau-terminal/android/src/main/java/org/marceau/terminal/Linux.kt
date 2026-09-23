@@ -72,21 +72,72 @@ internal object Linux {
     extraireTarGz(archive, temporaire)
     archive.delete()
 
-    // Internet dans le Linux : serveurs DNS.
-    File(temporaire, "etc").mkdirs()
-    File(temporaire, "etc/resolv.conf").apply { delete() }.writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n")
-    File(temporaire, "root").mkdirs()
-    File(temporaire, "etc/profile.d").mkdirs()
-    File(temporaire, "etc/profile.d/marceau.sh").writeText(
-      """
-      |export PS1='\[\e[38;5;208m\]linux\[\e[0m\]:\w \$ '
-      |alias ll='ls -la'
-      |""".trimMargin(),
-    )
     File(temporaire, MARQUEUR).writeText(fichier)
+    ecrireConfig(temporaire, fichier)
 
     supprimerSansSuivre(racine)
     if (!temporaire.renameTo(racine)) throw IOException("Impossible de finaliser l'installation")
+  }
+
+  /** Numéro de la configuration écrite : on met à jour un ancien Linux quand ce numéro change. */
+  private const val VERSION_CONFIG = 1
+  private const val MARQUEUR_CONFIG = ".marceau-config"
+
+  /** Branche du dépôt correspondant à la version installée, ex. « v3.22 » (et non « latest-stable »
+   *  qui bougerait vers une nouvelle version incompatible avec le rootfs déjà en place). */
+  private fun brancheAlpine(fichier: String): String {
+    val v = Regex("""alpine-minirootfs-(\d+)\.(\d+)""").find(fichier)
+    return if (v != null) "v${v.groupValues[1]}.${v.groupValues[2]}" else "latest-stable"
+  }
+
+  /** Écrit DNS, dépôts (épinglés) et la commande d'aide « outils » dans un rootfs. */
+  private fun ecrireConfig(racine: File, fichier: String) {
+    File(racine, "etc").mkdirs()
+    File(racine, "etc/resolv.conf").apply { delete() }.writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n")
+    File(racine, "root").mkdirs()
+
+    // Dépôts Alpine complets (main + community) : des milliers d'outils installables à la
+    // demande avec « apk add » (nmap, python3, git, nodejs, hydra, john…). Épinglés à la
+    // version installée pour éviter une mise à niveau partielle vers une nouvelle version.
+    val branche = brancheAlpine(fichier)
+    File(racine, "etc/apk").mkdirs()
+    File(racine, "etc/apk/repositories").writeText(
+      "https://dl-cdn.alpinelinux.org/alpine/$branche/main\n" +
+        "https://dl-cdn.alpinelinux.org/alpine/$branche/community\n",
+    )
+
+    File(racine, "etc/profile.d").mkdirs()
+    File(racine, "etc/profile.d/marceau.sh").writeText(
+      """
+      |export PS1='\[\e[38;5;208m\]linux\[\e[0m\]:\w \$ '
+      |alias ll='ls -la'
+      |# « outils » : rappelle comment installer des outils (tu choisis, tu télécharges).
+      |outils() {
+      |  echo 'Installe un outil avec :  apk add <nom>   (ex. apk add nmap)'
+      |  echo 'Mets à jour la liste des paquets une fois :  apk update'
+      |  echo
+      |  echo 'Réseau      : nmap tcpdump netcat-openbsd bind-tools curl wget'
+      |  echo 'Mots de passe: john hashcat hydra'
+      |  echo 'Wi-Fi       : aircrack-ng wireless-tools'
+      |  echo 'Web         : nikto sqlmap whatweb'
+      |  echo 'Programmation: python3 py3-pip git nodejs npm gcc make'
+      |  echo
+      |  echo 'Cherche un paquet :  apk search <mot>'
+      |  echo 'Sers-toi de ces outils uniquement sur TES appareils/réseaux ou avec autorisation écrite.'
+      |}
+      |echo 'Bienvenue dans Linux. Tape  outils  pour voir comment installer des programmes.'
+      |""".trimMargin() + "\n",
+    )
+    File(racine, MARQUEUR_CONFIG).writeText(VERSION_CONFIG.toString())
+  }
+
+  /** Met à jour la config d'un Linux déjà installé avant cette version de l'appli. */
+  private fun migrerConfig(ctx: Context) {
+    val racine = racine(ctx)
+    val marqueur = File(racine, MARQUEUR_CONFIG)
+    if (marqueur.exists() && marqueur.readText().trim() == VERSION_CONFIG.toString()) return
+    val fichier = try { File(racine, MARQUEUR).readText().trim() } catch (ignore: Exception) { "" }
+    try { ecrireConfig(racine, fichier) } catch (ignore: Exception) {}
   }
 
   private fun sha256(f: File): String {
@@ -121,6 +172,8 @@ internal object Linux {
 
   /** Commande qui lance le shell Linux avec PRoot. */
   fun commande(ctx: Context): Triple<String, Array<String>, Array<String>> {
+    // Met à jour un Linux installé avant cette version (dépôts épinglés, commande « outils »).
+    migrerConfig(ctx)
     val dossier = dossier(ctx)
     // PRoot a besoin de libtalloc.so.2 ; Android l'a installée sous le nom libtalloc.so.
     // Ses autres bibliothèques (libandroid-shmem.so) sont trouvées dans le dossier natif.
