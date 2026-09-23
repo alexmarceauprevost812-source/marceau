@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -461,6 +461,14 @@ function NouveauProjet({
     setProgres(null);
   };
 
+  // Chaque import a un numéro : si on ferme la fenêtre pendant l'import, son résultat est ignoré.
+  const importEnCours = useRef(0);
+  const fermer = () => {
+    importEnCours.current++;
+    reinitialiser();
+    onFermer();
+  };
+
   const creer = async () => {
     setErreur('');
     if (mode === 'vide') {
@@ -471,11 +479,17 @@ function NouveauProjet({
     }
     if (!adresse.trim() || progres) return;
     setProgres('Lecture du dépôt…');
+    const numero = ++importEnCours.current;
+    const toujoursDemande = () => numero === importEnCours.current;
     try {
-      const r = await importerDepot(adresse, jeton, (fait, total) => setProgres(`Téléchargement ${fait} / ${total} fichiers…`));
+      const r = await importerDepot(adresse, jeton, (fait, total) => {
+        if (toujoursDemande()) setProgres(`Téléchargement ${fait} / ${total} fichiers…`);
+      });
+      if (!toujoursDemande()) return; // import annulé
       onCreer(nom.trim() || r.nom, r.description, r.fichiers, r.lien);
       reinitialiser();
     } catch (e) {
+      if (!toujoursDemande()) return;
       setErreur((e as Error).message);
       setProgres(null);
     }
@@ -499,10 +513,10 @@ function NouveauProjet({
   const depotsFiltres = (depots ?? []).filter((d) => d.nomComplet.toLowerCase().includes(filtre.trim().toLowerCase()));
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onFermer}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={fermer}>
       <SafeAreaView style={[styles.flex, { backgroundColor: c.fond }]}>
         <View style={styles.barre}>
-          <Pressable onPress={onFermer} hitSlop={12}>
+          <Pressable onPress={fermer} hitSlop={12}>
             <Text style={[styles.lien, { color: c.accentTexte }]}>Annuler</Text>
           </Pressable>
           <Text style={[styles.titreBarre, { color: c.texte }]}>Nouveau projet</Text>
@@ -585,7 +599,7 @@ function NouveauProjet({
               ) : (
                 <Pressable
                   onPress={() => {
-                    onFermer();
+                    fermer();
                     ouvrirReglages('codex');
                   }}
                   style={[styles.boutonSecondaire, { borderColor: c.accent, alignSelf: 'stretch' }]}

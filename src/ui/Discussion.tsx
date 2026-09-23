@@ -84,12 +84,14 @@ export function Discussion({
 
   // Si on quitte la conversation pendant une réponse, on enregistre l'échange tout de suite
   // (le composant disparaît avant que la réponse ne soit enregistrée normalement).
-  const enCours = useRef({ echange, recu, final, onMessages });
-  enCours.current = { echange, recu, final, onMessages };
+  const enCours = useRef({ echange, recu, final, onMessages, pieces });
+  enCours.current = { echange, recu, final, onMessages, pieces };
   useEffect(
     () => () => {
-      const { echange: e, recu: r, final: f, onMessages: enregistrer } = enCours.current;
+      const { echange: e, recu: r, final: f, onMessages: enregistrer, pieces: nonEnvoyees } = enCours.current;
       controleur.current?.abort();
+      // Photos et PDF joints mais pas envoyés : leurs copies ne serviront plus.
+      supprimerPieces(nonEnvoyees);
       if (f) enregistrer(f);
       else if (e) {
         const debut = sansReflexion(r).trim();
@@ -195,9 +197,17 @@ export function Discussion({
       if (versProjet && onImporterDansProjet) {
         const textes = nouvelles.filter((p) => p.type === 'texte');
         if (textes.length) onImporterDansProjet(textes);
-        if (textes.length < nouvelles.length) setErreur('Seuls les fichiers texte ou code vont dans le projet.');
+        if (textes.length < nouvelles.length) {
+          // Images et PDF refusés : on efface les copies déjà faites sur le téléphone.
+          supprimerPieces(nouvelles.filter((p) => p.type !== 'texte'));
+          setErreur('Seuls les fichiers texte ou code vont dans le projet.');
+        }
       } else {
-        setPieces((prev) => [...prev, ...nouvelles].slice(0, 10));
+        setPieces((prev) => {
+          const toutes = [...prev, ...nouvelles];
+          supprimerPieces(toutes.slice(10)); // au-delà de 10 pièces, les copies en trop sont effacées
+          return toutes.slice(0, 10);
+        });
       }
     } catch (e) {
       setErreur((e as Error).message || "Impossible d'ajouter ce fichier.");

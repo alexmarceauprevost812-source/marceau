@@ -98,7 +98,13 @@ export async function choisirFichiers(): Promise<PieceJointe[]> {
   for (const a of res.assets) {
     const mime = a.mimeType ?? '';
     if (mime.startsWith('image/')) {
-      const image = await manipulateAsync(a.uri, [], { compress: 0.75, format: SaveFormat.JPEG });
+      // Même taille maximale que pour la galerie (le sélecteur de fichiers ne donne pas les dimensions).
+      const taille = await manipulateAsync(a.uri, []);
+      const grand = Math.max(taille.width, taille.height) > COTE_MAX_IMAGE;
+      const redim = grand
+        ? [{ resize: taille.width >= taille.height ? { width: COTE_MAX_IMAGE } : { height: COTE_MAX_IMAGE } }]
+        : [];
+      const image = await manipulateAsync(a.uri, redim, { compress: 0.75, format: SaveFormat.JPEG });
       pieces.push({ id: id(), type: 'image', nom: a.name, mime: 'image/jpeg', uri: await garder(image.uri, a.name) });
     } else if (mime === 'application/pdf' || /\.pdf$/i.test(a.name)) {
       if ((a.size ?? 0) > TAILLE_MAX_PDF) throw new Error(`« ${a.name} » est trop gros (20 Mo maximum).`);
