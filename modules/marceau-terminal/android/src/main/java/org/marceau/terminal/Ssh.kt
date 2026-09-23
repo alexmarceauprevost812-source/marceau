@@ -7,6 +7,7 @@ import com.jcraft.jsch.JSchException
 import com.jcraft.jsch.UserInfo
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
 import kotlin.concurrent.thread
@@ -54,13 +55,9 @@ internal class SessionSsh(
       throw IOException(messageClair(e), e)
     }
 
-    canal = session.openChannel("shell") as ChannelShell
-    canal.setPtyType("xterm-256color")
-    canal.setPtySize(colonnes, lignes, 0, 0)
-    canal.setEnv("LANG", "C.UTF-8")
-    val lecture = canal.inputStream
-    ecriture = canal.outputStream
-    canal.connect(10_000)
+    val (ouvert, lecture, sortie) = ouvrirShell(colonnes, lignes)
+    canal = ouvert
+    ecriture = sortie
 
     surSortie(id, "\u001b[2mConnecté à $utilisateur@$hote — empreinte ${session.hostKey.getFingerPrint(jsch)}\u001b[0m\r\n")
 
@@ -78,6 +75,30 @@ internal class SessionSsh(
       canal.disconnect()
       session.disconnect()
       surFin(id, code)
+    }
+  }
+
+  /**
+   * Ouvre le shell sur la connexion établie. En cas d'échec, la connexion est fermée :
+   * sinon elle resterait ouverte (avec son fil de maintien) sans que personne ne la tienne.
+   */
+  private fun ouvrirShell(colonnes: Int, lignes: Int): Triple<ChannelShell, InputStream, OutputStream> {
+    var ouvert: ChannelShell? = null
+    try {
+      val c = session.openChannel("shell") as ChannelShell
+      ouvert = c
+      c.setPtyType("xterm-256color")
+      c.setPtySize(colonnes, lignes, 0, 0)
+      c.setEnv("LANG", "C.UTF-8")
+      // Les flux se prennent avant connect(), sinon le début de la sortie peut être perdu.
+      val lecture = c.inputStream
+      val sortie = c.outputStream
+      c.connect(10_000)
+      return Triple(c, lecture, sortie)
+    } catch (e: Exception) {
+      ouvert?.disconnect()
+      session.disconnect()
+      throw if (e is JSchException) IOException(messageClair(e), e) else e
     }
   }
 

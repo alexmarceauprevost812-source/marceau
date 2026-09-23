@@ -213,8 +213,8 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
 // ---------------------------------------------------------------------------
 
 const MAISON_TERMUX = '/data/data/com.termux/files/home';
-/** Numéro du shell de la commande en cours, pour pouvoir l'interrompre (Ctrl+C). */
-const PID_TERMUX = '/data/data/com.termux/files/usr/tmp/marceau-commande.pid';
+/** Fichier où une commande note le numéro de son shell, pour pouvoir l'interrompre (Ctrl+C). */
+const pidTermux = (n: number) => `/data/data/com.termux/files/usr/tmp/marceau-commande-${n}.pid`;
 const guillemets = (t: string) => `'${t.replace(/'/g, `'\\''`)}'`;
 
 export function PanneauTermux({ couleurs: c, infos, rafraichir }: Base) {
@@ -241,9 +241,10 @@ export function PanneauTermux({ couleurs: c, infos, rafraichir }: Base) {
       occupe.current = true;
       const moi = ++numero.current;
       // On garde le dossier courant entre les commandes (cd fonctionne).
+      const pid = pidTermux(moi);
       const script =
-        `printf %s $$ > ${PID_TERMUX}\ncd ${guillemets(dossier.current)} 2>/dev/null\n${ligne}\n__c=$?\n` +
-        `rm -f ${PID_TERMUX}\nprintf '\\036%s' "$PWD"\nexit $__c`;
+        `printf %s $$ > ${pid}\ncd ${guillemets(dossier.current)} 2>/dev/null\n${ligne}\n__c=$?\n` +
+        `rm -f ${pid}\nprintf '\\036%s' "$PWD"\nexit $__c`;
       try {
         const r = await Terminal.termux(script, dossier.current);
         if (moi !== numero.current) return; // interrompue entre-temps
@@ -282,10 +283,11 @@ export function PanneauTermux({ couleurs: c, infos, rafraichir }: Base) {
   /** Ctrl+C : arrête la commande en cours dans Termux (ping, tail -f…) et rend la main. */
   const interrompre = useCallback(() => {
     if (occupe.current && Terminal) {
-      numero.current++;
+      // Le fichier de CETTE commande : une nouvelle commande tapée juste après a le sien.
+      const pid = pidTermux(numero.current++);
       occupe.current = false;
       const arret =
-        `p=$(cat ${PID_TERMUX} 2>/dev/null); rm -f ${PID_TERMUX}; [ -n "$p" ] || exit 0\n` +
+        `p=$(cat ${pid} 2>/dev/null); rm -f ${pid}; [ -n "$p" ] || exit 0\n` +
         `pkill -INT -P "$p"; sleep 1; pkill -KILL -P "$p"; kill -KILL "$p" 2>/dev/null; exit 0`;
       Terminal.termux(arret, MAISON_TERMUX).catch(() => {});
       terminal.current?.ecrire(GRIS('(commande interrompue)\n'));

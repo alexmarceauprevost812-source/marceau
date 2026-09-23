@@ -53,6 +53,19 @@ function trouverPaquet(index, nom) {
   throw new Error(`paquet ${nom} introuvable (ou sans SHA-256)`);
 }
 
+/** Paquets embarqués : PRoot et les bibliothèques dont il a besoin. */
+const PAQUETS = ['proot', 'libtalloc', 'libandroid-shmem'];
+
+/** Noms des paquets listés dans le champ « Depends: » d'un paquet. */
+function dependances(index, nom) {
+  for (const bloc of index.split(/\n\n+/)) {
+    if (!new RegExp(`^Package: ${nom}$`, 'm').test(bloc)) continue;
+    const m = bloc.match(/^Depends: (.+)$/m);
+    return m ? m[1].split(',').map((d) => d.trim().split(/[\s(]/)[0]).filter(Boolean) : [];
+  }
+  return [];
+}
+
 /** Télécharge un fichier et refuse de l'utiliser si son SHA-256 ne correspond pas. */
 async function telechargerVerifie(chemin, empreinte) {
   const contenu = await telecharger(chemin);
@@ -94,7 +107,11 @@ async function preparer(arch, abi) {
   const index = (
     await telechargerVerifie(`dists/stable/main/binary-${arch}/Packages`, empreinteIndex(release, arch))
   ).toString();
-  for (const paquet of ['proot', 'libtalloc']) {
+  // Si PRoot gagne une dépendance qu'on n'embarque pas, on s'arrête : un PRoot incomplet
+  // planterait au lancement, mieux vaut un onglet Linux marqué indisponible.
+  const manquantes = dependances(index, 'proot').filter((d) => !PAQUETS.includes(d));
+  if (manquantes.length) throw new Error(`dépendances de proot non prises en charge : ${manquantes.join(', ')}`);
+  for (const paquet of PAQUETS) {
     const { fichier, empreinte } = trouverPaquet(index, paquet);
     extraireDeb(await telechargerVerifie(fichier, empreinte), tmp);
   }
@@ -113,6 +130,7 @@ async function preparer(arch, abi) {
   copier('libexec/proot/loader', 'libproot-loader.so');
   copier('libexec/proot/loader32', 'libproot-loader32.so', false);
   copier('lib/libtalloc.so.2', 'libtalloc.so');
+  copier('lib/libandroid-shmem.so', 'libandroid-shmem.so');
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`  ✓ ${abi}`);
 }

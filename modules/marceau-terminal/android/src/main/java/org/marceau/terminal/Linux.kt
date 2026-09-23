@@ -48,7 +48,7 @@ internal object Linux {
     val arch = archAlpine()
     val base = "https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/$arch"
     progression("Recherche de la dernière version d'Alpine…", 0)
-    val yaml = URL("$base/latest-releases.yaml").readText()
+    val yaml = lireTexte("$base/latest-releases.yaml")
     // Le fichier et son empreinte SHA-256 (le « sha256: » qui suit « file: » dans la même entrée).
     val trouve = Regex("""file:\s*(alpine-minirootfs-[^\s]+\.tar\.gz)[\s\S]*?sha256:\s*([0-9a-fA-F]{64})""").find(yaml)
       ?: throw IOException("Version d'Alpine introuvable")
@@ -123,6 +123,7 @@ internal object Linux {
   fun commande(ctx: Context): Triple<String, Array<String>, Array<String>> {
     val dossier = dossier(ctx)
     // PRoot a besoin de libtalloc.so.2 ; Android l'a installée sous le nom libtalloc.so.
+    // Ses autres bibliothèques (libandroid-shmem.so) sont trouvées dans le dossier natif.
     // Le lien est recréé à chaque fois : le dossier natif change à chaque mise à jour.
     val lib = File(dossier, "lib").apply { mkdirs() }
     val talloc = File(lib, "libtalloc.so.2")
@@ -131,7 +132,7 @@ internal object Linux {
     val tmp = File(ctx.cacheDir, "proot").apply { mkdirs() }
 
     val env = mutableListOf(
-      "LD_LIBRARY_PATH=${lib.absolutePath}",
+      "LD_LIBRARY_PATH=${lib.absolutePath}:${ctx.applicationInfo.nativeLibraryDir}",
       "PROOT_LOADER=${natif(ctx, "libproot-loader.so").absolutePath}",
       "PROOT_TMP_DIR=${tmp.absolutePath}",
       "PROOT_NO_SECCOMP=1",
@@ -166,6 +167,19 @@ internal object Linux {
   }
 
   // ---------- Outils ----------
+
+  /** Lit un petit fichier texte, avec des délais d'attente (réseau mobile instable). */
+  private fun lireTexte(url: String): String {
+    val cnx = URL(url).openConnection() as HttpURLConnection
+    cnx.connectTimeout = 20_000
+    cnx.readTimeout = 30_000
+    try {
+      if (cnx.responseCode != 200) throw IOException("Serveur d'Alpine injoignable (HTTP ${cnx.responseCode})")
+      return cnx.inputStream.bufferedReader().use { it.readText() }
+    } finally {
+      cnx.disconnect()
+    }
+  }
 
   private fun telecharger(url: String, dest: File, progression: (Int) -> Unit) {
     val cnx = URL(url).openConnection() as HttpURLConnection
