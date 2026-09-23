@@ -68,6 +68,7 @@ export const ACCENTS: Record<
   vert: { nom: 'Vert', jour: ['#1F9D55', '#0F5C30', '#0D0D0D'], nuit: ['#34D17A', '#34D17A', '#000000'] },
   violet: { nom: 'Violet', jour: ['#8B3FE0', '#56209A', '#FFFFFF'], nuit: ['#A970FF', '#B98AFF', '#000000'] },
   rose: { nom: 'Rose', jour: ['#E0357A', '#8F1A4A', '#0D0D0D'], nuit: ['#FF5C9D', '#FF7AAF', '#000000'] },
+  rouge: { nom: 'Rouge', jour: ['#D62828', '#9E1B1B', '#FFFFFF'], nuit: ['#FF4D4D', '#FF6B6B', '#000000'] },
 };
 
 /** true si l'application est en mode nuit (selon le téléphone ou le choix fait dans Préférences). */

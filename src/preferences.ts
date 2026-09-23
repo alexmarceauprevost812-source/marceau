@@ -6,7 +6,7 @@ import { sauvegarder } from './hooks/usePersistant';
 /** Préférences de l'application (apparence, sécurité, voix), gardées sur le téléphone. */
 export type Preferences = {
   theme: 'auto' | 'jour' | 'nuit';
-  accent: 'orange' | 'bleu' | 'vert' | 'violet' | 'rose';
+  accent: 'orange' | 'bleu' | 'vert' | 'violet' | 'rose' | 'rouge';
   verrou: boolean;
   vitesseVoix: number;
 };
