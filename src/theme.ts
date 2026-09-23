@@ -12,6 +12,17 @@ const clair = {
   accentTexte: '#8F4200',
   surAccent: '#0D0D0D',
   danger: '#A31E16',
+  /** Couleurs du code (coloration syntaxique). */
+  code: {
+    texte: '#0D0D0D',
+    mot: '#A34700',
+    chaine: '#1C6B1C',
+    commentaire: '#5E6166',
+    nombre: '#0B5CAD',
+    balise: '#A3144D',
+    attribut: '#6B2FB3',
+    fonction: '#00605F',
+  },
 };
 
 /** Nuit : noir, écriture blanche, boutons orange. */
@@ -25,6 +36,16 @@ const sombre: typeof clair = {
   accentTexte: '#FF8A1F',
   surAccent: '#000000',
   danger: '#FF5A4E',
+  code: {
+    texte: '#FFFFFF',
+    mot: '#FF8A1F',
+    chaine: '#FFD166',
+    commentaire: '#6F7F5C',
+    nombre: '#5CD6FF',
+    balise: '#FF6B9A',
+    attribut: '#C49BFF',
+    fonction: '#7DF9C4',
+  },
 };
 
 export type Couleurs = typeof clair;

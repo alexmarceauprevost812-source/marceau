@@ -67,7 +67,7 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
 
   const reglages = () => {
     fermer();
-    ouvrirReglages();
+    ouvrirReglages('chat');
   };
 
   const champ = [styles.champ, { backgroundColor: c.carte, borderColor: c.bordure, color: c.texte }];

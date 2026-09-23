@@ -3,6 +3,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import * as Clipboard from 'expo-clipboard';
 
 import type { Couleurs } from '../theme';
+import { CodeColore } from './Coloration';
 
 export const POLICE_CODE = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
@@ -73,9 +74,21 @@ type Props = {
   /** Si fourni, les blocs avec un chemin affichent un bouton « Enregistrer ». */
   onEnregistrerFichier?: (b: BlocCode) => void;
   fichiersExistants?: string[];
+  /** Si fourni, les blocs HTML affichent un bouton « ▶ Studio ». */
+  onOuvrirStudio?: (b: BlocCode) => void;
 };
 
-export const Markdown = memo(function Markdown({ texte, couleurs: c, onEnregistrerFichier, fichiersExistants }: Props) {
+export function estPageHTML(b: BlocCode) {
+  return /^(html|htm|svg)$/i.test(b.langage) || /\.(html?|svg)$/i.test(b.chemin) || /^\s*<!doctype html/i.test(b.code);
+}
+
+export const Markdown = memo(function Markdown({
+  texte,
+  couleurs: c,
+  onEnregistrerFichier,
+  fichiersExistants,
+  onOuvrirStudio,
+}: Props) {
   const segments = decouper(texte);
   return (
     <View style={styles.pile}>
@@ -87,6 +100,7 @@ export const Markdown = memo(function Markdown({ texte, couleurs: c, onEnregistr
             couleurs={c}
             onEnregistrer={onEnregistrerFichier && s.chemin && s.complet ? () => onEnregistrerFichier(s) : undefined}
             existe={!!s.chemin && !!fichiersExistants?.includes(s.chemin)}
+            onStudio={onOuvrirStudio && s.complet && estPageHTML(s) ? () => onOuvrirStudio(s) : undefined}
           />
         ) : (
           <Paragraphes key={i} texte={s.texte} couleurs={c} />
@@ -174,11 +188,13 @@ function BlocDeCode({
   couleurs: c,
   onEnregistrer,
   existe,
+  onStudio,
 }: {
   bloc: BlocCode;
   couleurs: Couleurs;
   onEnregistrer?: () => void;
   existe: boolean;
+  onStudio?: () => void;
 }) {
   const [copie, setCopie] = useState(false);
   const [enregistre, setEnregistre] = useState(false);
@@ -197,6 +213,17 @@ function BlocDeCode({
           {!bloc.complet ? ' …' : ''}
         </Text>
         <View style={styles.actions}>
+          {onStudio && (
+            <Pressable
+              onPress={onStudio}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Voir dans le Studio"
+              style={[styles.boutonBloc, { backgroundColor: c.accent }]}
+            >
+              <Text style={[styles.texteBoutonBloc, { color: c.surAccent }]}>▶ Studio</Text>
+            </Pressable>
+          )}
           {onEnregistrer && (
             <Pressable
               onPress={() => {
@@ -218,8 +245,8 @@ function BlocDeCode({
         </View>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <Text selectable style={[styles.code, { color: c.texte }]}>
-          {bloc.code}
+        <Text selectable style={[styles.code, { color: c.code.texte }]}>
+          <CodeColore code={bloc.code} langage={bloc.langage} chemin={bloc.chemin} couleurs={c} />
         </Text>
       </ScrollView>
     </View>

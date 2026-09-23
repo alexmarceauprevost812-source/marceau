@@ -7,6 +7,7 @@ import { EcranChat } from './src/ecrans/EcranChat';
 import { EcranCodex } from './src/ecrans/EcranCodex';
 import { EcranReglages } from './src/ecrans/EcranReglages';
 import { EcranTaches } from './src/ecrans/EcranTaches';
+import type { Espace } from './src/ia/fournisseurs';
 import { ReglagesIAProvider } from './src/ia/ReglagesContexte';
 import { useCouleurs } from './src/theme';
 
@@ -21,8 +22,8 @@ const ONGLETS: { cle: Onglet; icone: string; libelle: string }[] = [
 export default function App() {
   const couleurs = useCouleurs();
   const [onglet, setOnglet] = useState<Onglet>('taches');
-  const [reglagesOuverts, setReglagesOuverts] = useState(false);
-  const ouvrirReglages = useCallback(() => setReglagesOuverts(true), []);
+  const [reglagesOuverts, setReglagesOuverts] = useState<Espace | null>(null);
+  const ouvrirReglages = useCallback((espace: Espace = 'chat') => setReglagesOuverts(espace), []);
 
   return (
     <SafeAreaProvider>
@@ -63,7 +64,12 @@ export default function App() {
           </View>
         </SafeAreaView>
 
-        <EcranReglages visible={reglagesOuverts} couleurs={couleurs} onFermer={() => setReglagesOuverts(false)} />
+        <EcranReglages
+          visible={reglagesOuverts !== null}
+          espaceInitial={reglagesOuverts ?? 'chat'}
+          couleurs={couleurs}
+          onFermer={() => setReglagesOuverts(null)}
+        />
         <StatusBar style="auto" />
       </ReglagesIAProvider>
     </SafeAreaProvider>
