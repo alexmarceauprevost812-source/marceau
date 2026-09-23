@@ -205,8 +205,21 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
     );
   }
 
-  return <SessionPty couleurs={c} type="linux" />;
+  return (
+    <View style={styles.flex}>
+      <View style={[styles.barreAction, { borderColor: c.bordure }]}>
+        <Text style={[styles.petit, { color: c.texteDoux, flex: 1 }]} numberOfLines={2}>
+          Catalogue d'outils Kali (doc officielle) : lis ce que fait chaque commande avant de la lancer.
+        </Text>
+        <Bouton couleurs={c} libelle="📖 Outils" compact secondaire onPress={() => Linking.openURL(LIEN_KALI)} />
+      </View>
+      <SessionPty couleurs={c} type="linux" />
+    </View>
+  );
 }
+
+/** Catalogue officiel des outils de Kali Linux (à lire dans le navigateur, pas exécuté par l'appli). */
+export const LIEN_KALI = 'https://www.kali.org/tools/';
 
 // ---------------------------------------------------------------------------
 // Option 2 : Termux

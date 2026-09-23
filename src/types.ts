@@ -40,6 +40,8 @@ export type Projet = {
   description: string;
   fichiers: Fichier[];
   messages: MessageIA[];
+  /** Conversation avec l'agent Claude (mode agent du Codex). */
+  messagesAgent?: MessageIA[];
   /** Dépôt GitHub relié (lecture et écriture). */
   github?: LienGithub;
   /** Fichiers supprimés depuis la dernière synchro GitHub. */

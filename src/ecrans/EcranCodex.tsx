@@ -22,6 +22,7 @@ import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 import type { Fichier, LienGithub, Projet } from '../types';
 import { Discussion, type Raccourci } from '../ui/Discussion';
+import { AgentCodex } from './AgentCodex';
 import { Entete, PuceIA } from '../ui/Entete';
 import { Explorateur } from '../ui/Explorateur';
 import { blocsAvecFichier, POLICE_CODE, type BlocCode } from '../ui/Markdown';
@@ -200,7 +201,7 @@ function VueProjet({
   onRetour: () => void;
   onModifier: (f: (p: Projet) => Projet) => void;
 }) {
-  const [onglet, setOnglet] = useState<'discussion' | 'code'>('discussion');
+  const [onglet, setOnglet] = useState<'discussion' | 'agent' | 'code'>('discussion');
   const [studio, setStudio] = useState<{ html: string; titre: string } | null>(null);
   const [envoi, setEnvoi] = useState(false);
   const [maj, setMaj] = useState<string | null>(null);
@@ -327,7 +328,7 @@ function VueProjet({
       </View>
 
       <View style={[styles.segments, { borderColor: c.bordure }]}>
-        {(['discussion', 'code'] as const).map((o) => {
+        {(['discussion', 'agent', 'code'] as const).map((o) => {
           const actif = onglet === o;
           return (
             <Pressable
@@ -338,7 +339,7 @@ function VueProjet({
               style={[styles.segment, actif && { backgroundColor: c.accent }]}
             >
               <Text style={{ color: actif ? c.surAccent : c.texte, fontWeight: '700' }}>
-                {o === 'discussion' ? '💬 Discussion' : `</> Code (${p.fichiers.length})`}
+                {o === 'discussion' ? '💬 Discussion' : o === 'agent' ? '🤖 Agent' : `</> Code (${p.fichiers.length})`}
               </Text>
             </Pressable>
           );
@@ -394,6 +395,11 @@ function VueProjet({
             );
           }}
         />
+      </View>
+
+      {/* L'agent reste monté pendant qu'il travaille, même si on change d'onglet */}
+      <View style={[styles.flex, onglet !== 'agent' && styles.cache]}>
+        <AgentCodex projet={p} couleurs={c} onModifier={onModifier} />
       </View>
 
       {onglet === 'code' && (
