@@ -1,23 +1,35 @@
-import type { Fichier } from '../types';
+import type { Fichier, LienGithub, Projet } from '../types';
 
-/** Import d'un dépôt GitHub dans un projet Codex. */
+/**
+ * GitHub : lire (importer) et écrire (commit + push) des projets du Codex.
+ * Le jeton personnel GitHub se met dans Réglages IA → Codex.
+ */
 
-const MAX_FICHIERS = 200;
-const MAX_TAILLE_FICHIER = 150_000; // octets
-const MAX_TAILLE_TOTALE = 2_500_000;
+const API = 'https://api.github.com';
+const MAX_FICHIERS = 300;
+const MAX_TAILLE_FICHIER = 200_000; // octets
+const MAX_TAILLE_TOTALE = 4_000_000;
 
 const DOSSIERS_IGNORES =
   /(^|\/)(node_modules|\.git|dist|build|out|\.next|\.expo|\.gradle|Pods|vendor|venv|\.venv|__pycache__|coverage|\.idea|\.vscode)\//;
 const FICHIERS_IGNORES = /(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|\.min\.(js|css)|\.map)$/i;
 const EXTENSIONS_TEXTE =
-  /\.(txt|md|markdown|json|jsonc|xml|html?|css|scss|less|js|jsx|mjs|cjs|ts|tsx|py|rb|php|java|kt|kts|swift|c|h|cpp|hpp|cs|go|rs|dart|lua|sh|bash|zsh|ps1|bat|sql|yml|yaml|toml|ini|cfg|conf|gradle|properties|vue|svelte|astro|tex|csv|env\.example|gitignore|editorconfig|prettierrc|eslintrc)$|(^|\/)(Dockerfile|Makefile|LICENSE|README|Procfile|CLAUDE\.md|AGENTS\.md)$/i;
+  /\.(txt|md|markdown|json|jsonc|xml|html?|css|scss|less|js|jsx|mjs|cjs|ts|tsx|py|rb|php|java|kt|kts|swift|c|h|cpp|hpp|cs|go|rs|dart|lua|sh|bash|zsh|ps1|bat|sql|yml|yaml|toml|ini|cfg|conf|gradle|properties|vue|svelte|astro|tex|csv|env\.example|gitignore|editorconfig|prettierrc|eslintrc|svg)$|(^|\/)(Dockerfile|Makefile|LICENSE|README|Procfile|CLAUDE\.md|AGENTS\.md)$/i;
 
 export type ResultatImport = {
   nom: string;
   description: string;
-  branche: string;
+  lien: LienGithub;
   fichiers: Fichier[];
   ignores: number;
+};
+
+export type Depot = {
+  nomComplet: string;
+  prive: boolean;
+  branche: string;
+  description: string;
+  majLe: string;
 };
 
 /** Lit « github.com/proprio/depot[/tree/branche] » ou « proprio/depot ». */
@@ -30,52 +42,119 @@ export function lireAdresse(adresse: string): { proprio: string; depot: string; 
   return { proprio: m[1], depot: m[2], branche: m[3] ? decodeURIComponent(m[3]) : undefined };
 }
 
-async function api<T>(url: string, jeton?: string): Promise<T> {
-  const reponse = await fetch(url, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      ...(jeton?.trim() ? { Authorization: `Bearer ${jeton.trim()}` } : {}),
-    },
-  });
-  if (reponse.status === 404) throw new Error('Dépôt introuvable. Vérifie l’adresse (ou ajoute un jeton s’il est privé).');
-  if (reponse.status === 401) throw new Error('Jeton GitHub refusé.');
-  if (reponse.status === 403 || reponse.status === 429) {
-    throw new Error('Limite de GitHub atteinte (60 demandes par heure sans jeton). Réessaie plus tard ou ajoute un jeton.');
+class ErreurGithub extends Error {
+  constructor(
+    message: string,
+    public statut: number,
+  ) {
+    super(message);
   }
-  if (!reponse.ok) throw new Error(`Erreur GitHub ${reponse.status}.`);
+}
+
+async function api<T>(chemin: string, jeton?: string, init?: { method?: string; body?: unknown }): Promise<T> {
+  let reponse: Response;
+  try {
+    reponse = await fetch(chemin.startsWith('http') ? chemin : `${API}${chemin}`, {
+      method: init?.method ?? 'GET',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(jeton?.trim() ? { Authorization: `Bearer ${jeton.trim()}` } : {}),
+      },
+      body: init?.body ? JSON.stringify(init.body) : undefined,
+    });
+  } catch {
+    throw new ErreurGithub('Impossible de joindre GitHub. Vérifie ta connexion Internet.', 0);
+  }
+  if (!reponse.ok) {
+    const detail = await reponse.json().catch(() => ({}) as { message?: string });
+    const msg = (detail as { message?: string }).message ?? '';
+    let texte: string;
+    switch (reponse.status) {
+      case 401:
+        texte = 'Jeton GitHub refusé ou expiré. Vérifie-le dans Réglages IA → Codex.';
+        break;
+      case 403:
+      case 429:
+        texte = /rate limit/i.test(msg)
+          ? 'Limite de GitHub atteinte. Ajoute ton jeton GitHub dans les réglages (5000 demandes/heure au lieu de 60).'
+          : `GitHub refuse l’accès : ton jeton n’a pas la permission nécessaire (Contents : lecture et écriture). ${msg}`;
+        break;
+      case 404:
+        texte = 'Introuvable sur GitHub (adresse, branche, ou dépôt privé sans jeton).';
+        break;
+      case 409:
+        texte = 'Le dépôt est vide ou en conflit.';
+        break;
+      case 422:
+        texte = `GitHub a refusé la demande : ${msg}`;
+        break;
+      default:
+        texte = `Erreur GitHub ${reponse.status}. ${msg}`.trim();
+    }
+    throw new ErreurGithub(texte, reponse.status);
+  }
+  if (reponse.status === 204) return undefined as T;
   return reponse.json() as Promise<T>;
 }
 
 /**
- * Trouve le commit d'une référence écrite après « /tree/ ». Une branche peut contenir des
- * « / » (feature/foo) et l'adresse peut continuer vers un dossier : on essaie du plus long
- * au plus court jusqu'à trouver une branche, un tag ou un commit qui existe.
+ * Trouve la branche et le commit d'une référence écrite après « /tree/ ». Une branche peut
+ * contenir des « / » (feature/foo) et l'adresse peut continuer vers un dossier
+ * (…/tree/main/src) : on essaie du plus long au plus court jusqu'à trouver ce qui existe.
  */
 async function resoudreReference(
   proprio: string,
   depot: string,
   reference: string,
   jeton?: string,
-): Promise<{ branche: string; commit: string; arbre: string }> {
+): Promise<{ branche: string; commit: string }> {
   const morceaux = reference.split('/').filter(Boolean);
   for (let n = morceaux.length; n >= 1; n--) {
     const essai = morceaux.slice(0, n).join('/');
-    const r = await fetch(`https://api.github.com/repos/${proprio}/${depot}/commits/${encodeURIComponent(essai)}`, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        ...(jeton?.trim() ? { Authorization: `Bearer ${jeton.trim()}` } : {}),
-      },
-    });
-    if (r.status === 404 || r.status === 422) continue;
-    if (r.status === 401) throw new Error('Jeton GitHub refusé.');
-    if (r.status === 403 || r.status === 429) {
-      throw new Error('Limite de GitHub atteinte (60 demandes par heure sans jeton). Réessaie plus tard ou ajoute un jeton.');
+    try {
+      const c = await api<{ sha: string }>(`/repos/${proprio}/${depot}/commits/${encodeURIComponent(essai)}`, jeton);
+      return { branche: essai, commit: c.sha };
+    } catch (e) {
+      if (e instanceof ErreurGithub && (e.statut === 404 || e.statut === 422)) continue;
+      throw e;
     }
-    if (!r.ok) throw new Error(`Erreur GitHub ${r.status}.`);
-    const j = (await r.json()) as { sha: string; commit: { tree: { sha: string } } };
-    return { branche: essai, commit: j.sha, arbre: j.commit.tree.sha };
   }
   throw new Error(`Branche introuvable : « ${reference} ».`);
+}
+
+const refBranche = (branche: string) => branche.split('/').map(encodeURIComponent).join('/');
+
+/** Vérifie le jeton et renvoie le nom d'utilisateur GitHub. */
+export async function utilisateurGithub(jeton: string): Promise<string> {
+  const u = await api<{ login: string }>('/user', jeton);
+  return u.login;
+}
+
+/** Liste les dépôts de l'utilisateur (les plus récents d'abord). */
+export async function listerDepots(jeton: string): Promise<Depot[]> {
+  const liste = await api<
+    { full_name: string; private: boolean; default_branch: string; description: string | null; pushed_at: string }[]
+  >('/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member', jeton);
+  return liste.map((d) => ({
+    nomComplet: d.full_name,
+    prive: d.private,
+    branche: d.default_branch,
+    description: d.description ?? '',
+    majLe: d.pushed_at,
+  }));
+}
+
+/** Liste les branches d'un dépôt. */
+export async function listerBranches(proprio: string, depot: string, jeton?: string): Promise<string[]> {
+  const liste = await api<{ name: string }[]>(`/repos/${proprio}/${depot}/branches?per_page=100`, jeton);
+  return liste.map((b) => b.name);
+}
+
+async function teteDeBranche(proprio: string, depot: string, branche: string, jeton?: string): Promise<string> {
+  const ref = await api<{ object: { sha: string } }>(`/repos/${proprio}/${depot}/git/ref/heads/${refBranche(branche)}`, jeton);
+  return ref.object.sha;
 }
 
 /** Télécharge les fichiers texte d'un dépôt GitHub (public, ou privé avec un jeton). */
@@ -89,20 +168,21 @@ export async function importerDepot(
   const { proprio, depot } = lu;
 
   const infos = await api<{ default_branch: string; description: string | null; name: string }>(
-    `https://api.github.com/repos/${proprio}/${depot}`,
+    `/repos/${proprio}/${depot}`,
     jeton,
   );
-  const ref = await resoudreReference(proprio, depot, lu.branche ?? infos.default_branch, jeton);
-  const branche = ref.branche;
-  const arbre = await api<{ tree: { path: string; type: string; size?: number }[]; truncated: boolean }>(
-    `https://api.github.com/repos/${proprio}/${depot}/git/trees/${ref.arbre}?recursive=1`,
+  const { branche, commit } = lu.branche
+    ? await resoudreReference(proprio, depot, lu.branche, jeton)
+    : { branche: infos.default_branch, commit: await teteDeBranche(proprio, depot, infos.default_branch, jeton) };
+  const arbre = await api<{ tree: { path: string; type: string; size?: number; sha: string }[]; truncated: boolean }>(
+    `/repos/${proprio}/${depot}/git/trees/${commit}?recursive=1`,
     jeton,
   );
 
   const candidats = arbre.tree.filter(
     (e) =>
       e.type === 'blob' &&
-      !DOSSIERS_IGNORES.test(`${e.path}`) &&
+      !DOSSIERS_IGNORES.test(e.path) &&
       !FICHIERS_IGNORES.test(e.path) &&
       EXTENSIONS_TEXTE.test(e.path) &&
       (e.size ?? 0) <= MAX_TAILLE_FICHIER,
@@ -122,12 +202,9 @@ export async function importerDepot(
   let fait = 0;
   const maintenant = Date.now();
   const brut = (chemin: string) =>
-    `https://raw.githubusercontent.com/${proprio}/${depot}/${ref.commit}/${chemin
-      .split('/')
-      .map(encodeURIComponent)
-      .join('/')}`;
+    `https://raw.githubusercontent.com/${proprio}/${depot}/${commit}/${chemin.split('/').map(encodeURIComponent).join('/')}`;
 
-  // Téléchargement par petits groupes
+  // Téléchargement par petits groupes (le jeton sert aussi pour les dépôts privés)
   for (let i = 0; i < choisis.length; i += 8) {
     const groupe = choisis.slice(i, i + 8);
     const contenus = await Promise.all(
@@ -142,7 +219,9 @@ export async function importerDepot(
     );
     groupe.forEach((e, k) => {
       const contenu = contenus[k];
-      if (contenu !== null && !contenu.includes('\u0000')) fichiers.push({ chemin: e.path, contenu, majLe: maintenant });
+      if (contenu !== null && !contenu.includes('\u0000')) {
+        fichiers.push({ chemin: e.path, contenu, origine: contenu, majLe: maintenant });
+      }
     });
     fait += groupe.length;
     progression?.(fait, choisis.length);
@@ -152,9 +231,101 @@ export async function importerDepot(
   fichiers.sort((a, b) => a.chemin.localeCompare(b.chemin));
   return {
     nom: `${infos.name}${lu.branche ? ` (${branche})` : ''}`,
-    description: `Importé de github.com/${proprio}/${depot} (${branche})${infos.description ? ` — ${infos.description}` : ''}`,
-    branche,
+    description: `github.com/${proprio}/${depot} (${branche})${infos.description ? ` — ${infos.description}` : ''}`,
+    lien: { proprio, depot, branche, commit },
     fichiers,
     ignores: arbre.tree.filter((e) => e.type === 'blob').length - fichiers.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Changements locaux et envoi (commit + push)
+// ---------------------------------------------------------------------------
+
+export type Changement = { chemin: string; etat: 'ajoute' | 'modifie' | 'supprime'; contenu: string | null };
+
+/** Ce qui a changé dans le projet depuis la dernière synchro GitHub. */
+export function changementsDuProjet(p: Projet): Changement[] {
+  const liste: Changement[] = [];
+  for (const f of p.fichiers) {
+    if (f.origine === undefined) liste.push({ chemin: f.chemin, etat: 'ajoute', contenu: f.contenu });
+    else if (f.origine !== f.contenu) liste.push({ chemin: f.chemin, etat: 'modifie', contenu: f.contenu });
+  }
+  for (const chemin of p.supprimes ?? []) {
+    if (!p.fichiers.some((f) => f.chemin === chemin)) liste.push({ chemin, etat: 'supprime', contenu: null });
+  }
+  return liste.sort((a, b) => a.chemin.localeCompare(b.chemin));
+}
+
+/**
+ * Crée un commit avec les changements et le pousse sur la branche.
+ * Si la branche n'existe pas, elle est créée à partir de `brancheDepart`.
+ * Les autres fichiers du dépôt ne sont pas touchés.
+ */
+export async function envoyerSurGithub(o: {
+  jeton: string;
+  proprio: string;
+  depot: string;
+  branche: string;
+  brancheDepart?: string;
+  message: string;
+  changements: Changement[];
+}): Promise<{ commit: string; url: string; brancheCreee: boolean }> {
+  const { jeton, proprio, depot, branche } = o;
+  if (!jeton.trim()) throw new Error('Ajoute ton jeton GitHub dans Réglages IA → Codex pour envoyer tes changements.');
+  if (!o.changements.length) throw new Error('Aucun changement à envoyer.');
+  const base = `/repos/${proprio}/${depot}`;
+
+  let parent: string;
+  let brancheCreee = false;
+  try {
+    parent = await teteDeBranche(proprio, depot, branche, jeton);
+  } catch (e) {
+    if (!(e instanceof ErreurGithub && e.statut === 404) || !o.brancheDepart) throw e;
+    const depart = await teteDeBranche(proprio, depot, o.brancheDepart, jeton);
+    await api(`${base}/git/refs`, jeton, { method: 'POST', body: { ref: `refs/heads/${branche}`, sha: depart } });
+    parent = depart;
+    brancheCreee = true;
+  }
+
+  const commitParent = await api<{ tree: { sha: string } }>(`${base}/git/commits/${parent}`, jeton);
+  const arbre = await api<{ sha: string }>(`${base}/git/trees`, jeton, {
+    method: 'POST',
+    body: {
+      base_tree: commitParent.tree.sha,
+      tree: o.changements.map((c) =>
+        c.etat === 'supprime'
+          ? { path: c.chemin, mode: '100644', type: 'blob', sha: null }
+          : { path: c.chemin, mode: '100644', type: 'blob', content: c.contenu ?? '' },
+      ),
+    },
+  });
+  const commit = await api<{ sha: string; html_url: string }>(`${base}/git/commits`, jeton, {
+    method: 'POST',
+    body: { message: o.message.trim() || 'Mise à jour depuis Marceau Codex', tree: arbre.sha, parents: [parent] },
+  });
+  await api(`${base}/git/refs/heads/${refBranche(branche)}`, jeton, {
+    method: 'PATCH',
+    body: { sha: commit.sha, force: false },
+  });
+  return { commit: commit.sha, url: commit.html_url, brancheCreee };
+}
+
+/** Crée un nouveau dépôt sur le compte de l'utilisateur. */
+export async function creerDepot(jeton: string, nom: string, description: string, prive: boolean) {
+  const d = await api<{ name: string; owner: { login: string }; default_branch: string }>('/user/repos', jeton, {
+    method: 'POST',
+    body: { name: nom, description, private: prive, auto_init: true },
+  });
+  return { proprio: d.owner.login, depot: d.name, branche: d.default_branch || 'main' };
+}
+
+/** Marque le projet comme synchronisé après un envoi réussi. */
+export function projetSynchronise(p: Projet, lien: LienGithub): Projet {
+  return {
+    ...p,
+    github: lien,
+    supprimes: [],
+    fichiers: p.fichiers.map((f) => ({ ...f, origine: f.contenu })),
   };
 }

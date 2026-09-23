@@ -37,7 +37,7 @@ type Props = {
   /** Boutons rapides toujours visibles au-dessus de la zone d'écriture. */
   raccourcis?: Raccourci[];
   onEnregistrerFichier?: (b: BlocCode) => void;
-  fichiersExistants?: string[];
+  fichiersExistants?: Record<string, string>;
   onOuvrirStudio?: (b: BlocCode) => void;
   /** Codex : ajoute une option « Importer dans le projet » au bouton +. */
   onImporterDansProjet?: (pieces: PieceJointe[]) => void;
@@ -76,6 +76,7 @@ export function Discussion({
   const [ajoutEnCours, setAjoutEnCours] = useState(false);
   const controleur = useRef<AbortController | null>(null);
   const defilement = useRef<ScrollView>(null);
+  const suivreFin = useRef(true);
 
   const { affiche, aJour } = useTexteFluide(sansReflexion(recu), echange !== null);
   const cleManquante = manqueCle(connexion);
@@ -101,6 +102,11 @@ export function Discussion({
     },
     [],
   );
+
+  // On descend en bas quand un message arrive (pas quand on ouvre/replie un bloc de code)
+  useEffect(() => {
+    suivreFin.current = true;
+  }, [messages.length]);
 
   // Quand la réponse est complète ET entièrement affichée, on l'enregistre.
   useEffect(() => {
@@ -231,7 +237,12 @@ export function Discussion({
         style={styles.flex}
         contentContainerStyle={styles.fil}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => defilement.current?.scrollToEnd({ animated: false })}
+        onContentSizeChange={() => {
+          if (occupe || suivreFin.current) {
+            defilement.current?.scrollToEnd({ animated: false });
+            if (!occupe) suivreFin.current = false;
+          }
+        }}
       >
         {vide && (
           <View style={styles.accueil}>
@@ -398,7 +409,7 @@ function Bulle({
   message: MessageIA;
   couleurs: Couleurs;
   onEnregistrerFichier?: (b: BlocCode) => void;
-  fichiersExistants?: string[];
+  fichiersExistants?: Record<string, string>;
   onOuvrirStudio?: (b: BlocCode) => void;
   action?: ReactNode;
 }) {
