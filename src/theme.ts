@@ -14,12 +14,12 @@ const clair = {
   danger: '#A31E16',
 };
 
-/** Nuit : noir, écriture vert lime, boutons orange. */
+/** Nuit : noir, écriture blanche, boutons orange. */
 const sombre: typeof clair = {
   fond: '#000000',
   carte: '#0E0E0E',
-  texte: '#A6FF00',
-  texteDoux: '#7DBA1C',
+  texte: '#FFFFFF',
+  texteDoux: '#A8A8A8',
   bordure: '#262626',
   accent: '#FF8A1F',
   accentTexte: '#FF8A1F',

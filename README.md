@@ -11,7 +11,7 @@ construite avec [Expo](https://expo.dev) et React Native.
 - Filtres : toutes / à faire / terminées
 - Effacer d'un coup les tâches terminées
 - Sauvegarde locale sur le téléphone (aucun compte, aucune donnée envoyée sur Internet)
-- Thème automatique : jour gris mat avec écriture noire, nuit noire avec écriture vert lime, boutons orange
+- Thème automatique : jour gris mat avec écriture noire, nuit noire avec écriture blanche, boutons orange
 - Interface en français, accessible (lecteurs d'écran)
 - **Assistant IA gratuit** : décris un objectif, l'IA le découpe en tâches
 - **Chat** : jase avec des IA en 3 modes (Discussion, Écriture, Sujet), réponses en direct, discussions sauvegardées
