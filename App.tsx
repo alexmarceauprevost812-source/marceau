@@ -16,6 +16,7 @@ import { MiseAJourProvider } from './src/maj/miseAJour';
 import { MenuLateral, MenuProvider, type Section } from './src/navigation/Menu';
 import { Verrou } from './src/securite/Verrou';
 import { useCouleurs, useModeNuit } from './src/theme';
+import { Reactions } from './src/ui/Avatar';
 
 type Ecran = Exclude<Section, 'parametres' | 'preferences'>;
 
@@ -94,6 +95,7 @@ export default function App() {
             onFermer={() => setPreferencesOuvertes(false)}
           />
           <Verrou couleurs={couleurs} />
+          <Reactions couleurs={couleurs} />
           <StatusBar style={nuit ? 'light' : 'dark'} />
         </MenuProvider>
       </ReglagesIAProvider>

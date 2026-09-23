@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Image, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { IMAGES } from '../images';
 import { numeroInstalle, useMiseAJour } from '../maj/miseAJour';
 import type { Section } from '../navigation/Menu';
 import type { Couleurs } from '../theme';
@@ -35,7 +36,7 @@ type Props = {
 export function Bureau({ visible, couleurs: c, onOuvrir, onFermer }: Props) {
   const anim = useRef(new Animated.Value(0)).current;
   const [monte, setMonte] = useState(visible);
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { heure, date } = useHeure();
   const { maj, verifier, installer } = useMiseAJour();
 
@@ -89,6 +90,14 @@ export function Bureau({ visible, couleurs: c, onOuvrir, onFermer }: Props) {
         {/* Fond d'écran : deux halos orange discrets */}
         <View pointerEvents="none" style={[styles.halo, { backgroundColor: c.accent, top: -120, right: -100 }]} />
         <View pointerEvents="none" style={[styles.halo, styles.halo2, { backgroundColor: c.accent, bottom: -160, left: -140 }]} />
+        {/* Fond d'écran : le M couronné, en filigrane */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.centre]}>
+          <Image
+            source={IMAGES.logoCouronne}
+            style={{ width: Math.min(width, height) * 0.9, height: Math.min(width, height) * 0.9, opacity: 0.22 }}
+            resizeMode="contain"
+          />
+        </View>
 
         <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.flex}>
           <View style={styles.barre}>
@@ -123,6 +132,7 @@ export function Bureau({ visible, couleurs: c, onOuvrir, onFermer }: Props) {
           </ScrollView>
 
           <View style={[styles.pied, { borderColor: c.bordure, backgroundColor: c.carte }]}>
+            <Image source={IMAGES.tiLexAl} style={styles.logoPied} resizeMode="contain" accessibilityLabel="TI-LEX-AL" />
             <Text numberOfLines={2} style={[styles.textePied, { color: c.texteDoux }]}>
               Marceau · build {numeroInstalle() || '—'}
               {etatMaj ? `  ·  ${etatMaj}` : ''}
@@ -217,8 +227,10 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 30 },
   pastille: { position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: 9, borderWidth: 3 },
   nom: { fontSize: 13, fontWeight: '700' },
-  pied: { margin: 16, borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
-  textePied: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  centre: { alignItems: 'center', justifyContent: 'center' },
+  pied: { margin: 16, borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  logoPied: { width: 44, height: 42 },
+  textePied: { flex: 1, fontSize: 12, fontWeight: '600', textAlign: 'center' },
   iconeBureau: { width: 22, height: 22, flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   carre: { width: 9, height: 9, borderRadius: 2.5, borderWidth: 2 },
 });

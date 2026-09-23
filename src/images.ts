@@ -18,4 +18,13 @@ export const IMAGES = {
   avatarRock: require('../assets/images/avatar-rock.webp'),
 } as const;
 
+/** Les trois poses de l'avatar, en petit format carré (tête + main). */
+export const AVATARS = {
+  neutre: require('../assets/images/avatar-carre-neutre.webp'),
+  pouce: require('../assets/images/avatar-carre-pouce.webp'),
+  rock: require('../assets/images/avatar-carre-rock.webp'),
+} as const;
+
+export type Pose = keyof typeof AVATARS;
+
 export type NomImage = keyof typeof IMAGES;

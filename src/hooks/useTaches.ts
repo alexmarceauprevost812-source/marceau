@@ -6,6 +6,7 @@ import { sauvegarder } from './usePersistant';
 import { annulerRappel, programmerRappel } from '../rappels/notifications';
 
 import type { Tache } from '../types';
+import { reagir } from '../ui/Avatar';
 
 const CLE_STOCKAGE = 'marceau:taches';
 
@@ -55,6 +56,7 @@ export function useTaches() {
     const t = courantes.current.find((x) => x.id === id);
     // Une tâche terminée n'a plus besoin de son rappel.
     if (t && !t.terminee && t.rappel) annulerRappel(t.rappel.id);
+    if (t && !t.terminee) reagir('rock', 'Tâche terminée !');
     setTaches((prev) =>
       prev.map((t) =>
         t.id === id ? { ...t, terminee: !t.terminee, rappel: t.terminee ? t.rappel : undefined } : t,

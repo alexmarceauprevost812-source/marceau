@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { IconeBureau } from '../bureau/Bureau';
+import { IMAGES } from '../images';
 import type { Couleurs } from '../theme';
 
 export type Section = 'chat' | 'codex' | 'projet' | 'terminal' | 'parametres' | 'preferences';
@@ -108,7 +109,10 @@ export function MenuLateral({ visible, actif, couleurs: c, onChoisir, onFermer }
         ]}
       >
         <SafeAreaView edges={['top', 'bottom', 'left']} style={styles.flex}>
-          <Text style={[styles.titre, { color: c.texte }]}>Marceau</Text>
+          <View style={styles.entete}>
+            <Image source={IMAGES.logoCouronne} style={styles.logo} accessibilityLabel="Logo Marceau" />
+            <Text style={[styles.titre, { color: c.texte }]}>Marceau</Text>
+          </View>
           <View style={styles.liste} accessibilityRole="menu">
             {SECTIONS.map(({ cle, icone, libelle }) => {
               const choisi = actif === cle;
@@ -141,7 +145,9 @@ const styles = StyleSheet.create({
   hamburger: { fontSize: 26, fontWeight: '700', lineHeight: 30 },
   voile: { backgroundColor: 'rgba(0,0,0,0.55)' },
   panneau: { position: 'absolute', top: 0, bottom: 0, left: 0, borderRightWidth: StyleSheet.hairlineWidth },
-  titre: { fontSize: 28, fontWeight: '800', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
+  entete: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, gap: 6 },
+  logo: { width: 132, height: 132, borderRadius: 66 },
+  titre: { fontSize: 24, fontWeight: '800' },
   liste: { paddingHorizontal: 12, gap: 6 },
   element: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, paddingVertical: 14, borderRadius: 14 },
   icone: { fontSize: 18, fontWeight: '800', width: 32, textAlign: 'center' },
