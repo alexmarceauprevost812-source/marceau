@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <!-- Envoyer des commandes à Termux (onglet Termux). -->
+  <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+  <!-- Android 11+ : pouvoir détecter si Termux est installé. -->
+  <queries>
+    <package android:name="com.termux" />
+  </queries>
+</manifest>

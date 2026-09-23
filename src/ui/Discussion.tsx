@@ -20,6 +20,8 @@ import { choisirFichiers, choisirImages, prendrePhoto, supprimerPieces, type Pie
 import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
 import { BoutonEcouter } from '../voix/BoutonEcouter';
 import type { Couleurs } from '../theme';
+import type { Pose } from '../images';
+import { Avatar } from './Avatar';
 import { Markdown, type BlocCode } from './Markdown';
 
 export type Raccourci = { libelle: string; message: string };
@@ -235,6 +237,10 @@ export function Discussion({
   };
 
   const vide = messages.length === 0 && !occupe;
+  // Avatar : pouce levé sur ta dernière question une fois que l'IA a répondu.
+  const derniereQuestion = messages.map((m) => m.role).lastIndexOf('user');
+  const poseDe = (i: number): Pose =>
+    i === derniereQuestion && !occupe && messages[i + 1]?.role === 'assistant' ? 'pouce' : 'neutre';
   const fournisseur = FOURNISSEURS[connexion.fournisseur];
 
   return (
@@ -278,6 +284,7 @@ export function Discussion({
             key={i}
             message={m}
             couleurs={c}
+            pose={poseDe(i)}
             onEnregistrerFichier={onEnregistrerFichier}
             fichiersExistants={fichiersExistants}
             onOuvrirStudio={onOuvrirStudio}
@@ -285,7 +292,7 @@ export function Discussion({
           />
         ))}
 
-        {echange && <Bulle message={echange.question} couleurs={c} />}
+        {echange && <Bulle message={echange.question} couleurs={c} pose="neutre" />}
         {echange &&
           (affiche ? (
             <Bulle message={{ role: 'assistant', content: affiche }} couleurs={c} />
@@ -416,9 +423,11 @@ function Bulle({
   fichiersExistants,
   onOuvrirStudio,
   action,
+  pose = 'neutre',
 }: {
   message: MessageIA;
   couleurs: Couleurs;
+  pose?: Pose;
   onEnregistrerFichier?: (b: BlocCode) => void;
   fichiersExistants?: Record<string, string>;
   onOuvrirStudio?: (b: BlocCode) => void;
@@ -426,6 +435,7 @@ function Bulle({
 }) {
   if (message.role === 'user') {
     return (
+      <View style={styles.ligneUtilisateur}>
       <View style={styles.colonneUtilisateur}>
         {!!message.pieces?.length && (
           <View style={styles.piecesEnvoyees}>
@@ -449,6 +459,8 @@ function Bulle({
           </Text>
         </View>
       </View>
+      <Avatar pose={pose} couleurs={c} />
+      </View>
     );
   }
   return (
@@ -471,7 +483,8 @@ const styles = StyleSheet.create({
   fil: { padding: 16, gap: 18, flexGrow: 1 },
   accueil: { flex: 1, justifyContent: 'center', gap: 10, paddingVertical: 24 },
   suggestion: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14 },
-  colonneUtilisateur: { alignSelf: 'flex-end', maxWidth: '88%', alignItems: 'flex-end', gap: 6 },
+  ligneUtilisateur: { flexDirection: 'row', alignItems: 'flex-end', alignSelf: 'flex-end', gap: 8, maxWidth: '92%' },
+  colonneUtilisateur: { flexShrink: 1, alignItems: 'flex-end', gap: 6 },
   bulleUtilisateur: {
     borderRadius: 18,
     borderBottomRightRadius: 6,
