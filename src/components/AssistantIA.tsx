@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -15,8 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { proposerTaches } from '../ia/client';
-import { FOURNISSEURS, reglagesParDefaut, type IdFournisseur, type ReglagesIA } from '../ia/fournisseurs';
-import { useReglagesIA } from '../hooks/useReglagesIA';
+import { FOURNISSEURS, manqueCle as cleAbsente } from '../ia/fournisseurs';
+import { useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 
 type Props = {
@@ -26,27 +25,15 @@ type Props = {
   onAjouter: (textes: string[]) => void;
 };
 
-type Vue = 'assistant' | 'reglages';
-
+/** Découpe un objectif en tâches grâce à l'IA active. */
 export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props) {
-  const { reglages, pret, enregistrer } = useReglagesIA();
-  const [vue, setVue] = useState<Vue>('assistant');
-  const [brouillon, setBrouillon] = useState<ReglagesIA>(reglages);
+  const { connexion, ouvrirReglages } = useReglagesIA();
   const [objectif, setObjectif] = useState('');
   const [propositions, setPropositions] = useState<{ texte: string; choisie: boolean }[]>([]);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState('');
 
-  const manqueCle = FOURNISSEURS[reglages.fournisseur].besoinCle && !reglages.cle.trim();
-
-  useEffect(() => {
-    if (visible && pret) {
-      setBrouillon(reglages);
-      setVue(manqueCle ? 'reglages' : 'assistant');
-    }
-    // on ne réagit qu'à l'ouverture
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, pret]);
+  const manqueCle = cleAbsente(connexion);
 
   const fermer = () => {
     setErreur('');
@@ -59,7 +46,7 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
     setErreur('');
     setPropositions([]);
     try {
-      const taches = await proposerTaches(reglages, objectif);
+      const taches = await proposerTaches(connexion, objectif);
       setPropositions(taches.map((texte) => ({ texte, choisie: true })));
     } catch (e) {
       setErreur((e as Error).message);
@@ -78,19 +65,12 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
     fermer();
   };
 
-  const changerFournisseur = (id: IdFournisseur) => {
-    if (id === brouillon.fournisseur) return;
-    setBrouillon({ ...reglagesParDefaut(id), cle: id === 'opencode' ? reglages.cle : '' });
-  };
-
-  const sauver = async () => {
-    await enregistrer(brouillon);
-    setErreur('');
-    setVue('assistant');
+  const reglages = () => {
+    fermer();
+    ouvrirReglages();
   };
 
   const champ = [styles.champ, { backgroundColor: c.carte, borderColor: c.bordure, color: c.texte }];
-  const fournisseur = FOURNISSEURS[brouillon.fournisseur];
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={fermer}>
@@ -101,22 +81,21 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
               <Text style={[styles.lien, { color: c.accentTexte }]}>Fermer</Text>
             </Pressable>
             <Text style={[styles.titreBarre, { color: c.texte }]}>
-              {vue === 'assistant' ? 'Assistant IA' : 'Réglages IA'}
+              Assistant IA
             </Text>
             <Pressable
-              onPress={() => (vue === 'assistant' ? (setBrouillon(reglages), setVue('reglages')) : sauver())}
+              onPress={reglages}
               hitSlop={12}
               accessibilityRole="button"
             >
-              <Text style={[styles.lien, { color: c.accentTexte }]}>{vue === 'assistant' ? 'Réglages' : 'Enregistrer'}</Text>
+              <Text style={[styles.lien, { color: c.accentTexte }]}>Réglages</Text>
             </Pressable>
           </View>
 
-          {vue === 'assistant' ? (
             <ScrollView contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
               <Text style={[styles.aide, { color: c.texteDoux }]}>
                 Décris ce que tu veux accomplir : l'IA le découpe en tâches.{'\n'}
-                {FOURNISSEURS[reglages.fournisseur].nom} · {reglages.modele}
+                {FOURNISSEURS[connexion.fournisseur].nom} · {connexion.modele}
               </Text>
               <TextInput
                 value={objectif}
@@ -145,7 +124,7 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
 
               {manqueCle && (
                 <Text style={[styles.message, { color: c.danger }]}>
-                  Ajoute ta clé OpenCode gratuite dans Réglages.
+                  Ajoute une clé API dans Réglages (ou choisis Ollama).
                 </Text>
               )}
               {!!erreur && <Text style={[styles.message, { color: c.danger }]}>{erreur}</Text>}
@@ -180,97 +159,6 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
                 </Pressable>
               )}
             </ScrollView>
-          ) : (
-            <ScrollView contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
-              <Text style={[styles.etiquette, { color: c.texteDoux }]}>FOURNISSEUR</Text>
-              <View style={styles.puces}>
-                {(Object.keys(FOURNISSEURS) as IdFournisseur[]).map((id) => {
-                  const actif = brouillon.fournisseur === id;
-                  return (
-                    <Pressable
-                      key={id}
-                      onPress={() => changerFournisseur(id)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: actif }}
-                      style={[
-                        styles.puce,
-                        { borderColor: c.bordure },
-                        actif && { backgroundColor: c.accent, borderColor: c.accent },
-                      ]}
-                    >
-                      <Text style={{ color: actif ? c.surAccent : c.texte, fontWeight: '600' }}>
-                        {FOURNISSEURS[id].nom}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <Text style={[styles.aide, { color: c.texteDoux }]}>{fournisseur.description}</Text>
-
-              <Text style={[styles.etiquette, { color: c.texteDoux }]}>ADRESSE DU SERVEUR</Text>
-              <TextInput
-                value={brouillon.url}
-                onChangeText={(url) => setBrouillon({ ...brouillon, url })}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                style={champ}
-                accessibilityLabel="Adresse du serveur"
-              />
-
-              <Text style={[styles.etiquette, { color: c.texteDoux }]}>MODÈLE</Text>
-              <TextInput
-                value={brouillon.modele}
-                onChangeText={(modele) => setBrouillon({ ...brouillon, modele })}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={champ}
-                accessibilityLabel="Modèle"
-              />
-              <View style={styles.puces}>
-                {fournisseur.modelesSuggeres.map((m) => (
-                  <Pressable
-                    key={m}
-                    onPress={() => setBrouillon({ ...brouillon, modele: m })}
-                    style={[styles.puceMini, { borderColor: c.bordure }]}
-                  >
-                    <Text style={{ color: c.texte, fontSize: 13 }}>{m}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              {fournisseur.besoinCle && (
-                <>
-                  <Text style={[styles.etiquette, { color: c.texteDoux }]}>CLÉ API (GRATUITE)</Text>
-                  <TextInput
-                    value={brouillon.cle}
-                    onChangeText={(cle) => setBrouillon({ ...brouillon, cle })}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    secureTextEntry
-                    placeholder="sk-…"
-                    placeholderTextColor={c.texteDoux}
-                    style={champ}
-                    accessibilityLabel="Clé API"
-                  />
-                  <Pressable onPress={() => Linking.openURL('https://opencode.ai/auth')} accessibilityRole="link">
-                    <Text style={[styles.lien, { color: c.accentTexte, marginTop: 8 }]}>Obtenir une clé gratuite →</Text>
-                  </Pressable>
-                  <Text style={[styles.aide, { color: c.texteDoux, marginTop: 8 }]}>
-                    La clé reste dans le coffre sécurisé de ton téléphone.
-                  </Text>
-                </>
-              )}
-
-              <Pressable
-                onPress={sauver}
-                accessibilityRole="button"
-                style={[styles.bouton, { backgroundColor: c.accent }]}
-              >
-                <Text style={[styles.boutonTexte, { color: c.surAccent }]}>Enregistrer</Text>
-              </Pressable>
-            </ScrollView>
-          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
