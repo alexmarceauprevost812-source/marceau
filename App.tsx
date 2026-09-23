@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { Bureau } from './src/bureau/Bureau';
+import { EcranCarte } from './src/ecrans/EcranCarte';
 import { EcranChat } from './src/ecrans/EcranChat';
 import { EcranCodex } from './src/ecrans/EcranCodex';
 import { EcranAgenda } from './src/ecrans/EcranAgenda';
@@ -19,13 +20,14 @@ import { Verrou } from './src/securite/Verrou';
 import { useCouleurs, useModeNuit } from './src/theme';
 import { Reactions } from './src/ui/Avatar';
 
-type Ecran = Exclude<Section, 'agenda' | 'parametres' | 'preferences'>;
+type Ecran = Exclude<Section, 'agenda' | 'carte' | 'parametres' | 'preferences'>;
 
 export default function App() {
   const couleurs = useCouleurs();
   const nuit = useModeNuit();
   const [preferencesOuvertes, setPreferencesOuvertes] = useState(false);
   const [agendaOuvert, setAgendaOuvert] = useState(false);
+  const [carteOuverte, setCarteOuverte] = useState(false);
   // L'application s'ouvre toujours sur le Chat.
   const [ecran, setEcran] = useState<Ecran>('chat');
   const [menuOuvert, setMenuOuvert] = useState(false);
@@ -47,6 +49,7 @@ export default function App() {
     if (s === 'parametres') setReglagesOuverts(ecran === 'codex' ? 'codex' : 'chat');
     else if (s === 'preferences') setPreferencesOuvertes(true);
     else if (s === 'agenda') setAgendaOuvert(true);
+    else if (s === 'carte') setCarteOuverte(true);
     else setEcran(s);
   };
 
@@ -98,6 +101,7 @@ export default function App() {
             onFermer={() => setPreferencesOuvertes(false)}
           />
           <EcranAgenda visible={agendaOuvert} couleurs={couleurs} onFermer={() => setAgendaOuvert(false)} />
+          <EcranCarte visible={carteOuverte} couleurs={couleurs} onFermer={() => setCarteOuverte(false)} />
           <Verrou couleurs={couleurs} />
           <Reactions couleurs={couleurs} />
           <StatusBar style={nuit ? 'light' : 'dark'} />

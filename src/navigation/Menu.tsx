@@ -6,7 +6,7 @@ import { IconeBureau } from '../bureau/Bureau';
 import { IMAGES } from '../images';
 import type { Couleurs } from '../theme';
 
-export type Section = 'chat' | 'codex' | 'projet' | 'terminal' | 'agenda' | 'parametres' | 'preferences';
+export type Section = 'chat' | 'codex' | 'projet' | 'terminal' | 'agenda' | 'carte' | 'parametres' | 'preferences';
 
 export const SECTIONS: { cle: Section; icone: string; libelle: string }[] = [
   { cle: 'chat', icone: '💬', libelle: 'Chat' },
