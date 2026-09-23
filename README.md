@@ -11,7 +11,10 @@ construite avec [Expo](https://expo.dev) et React Native.
 - Filtres : toutes / à faire / terminées
 - Effacer d'un coup les tâches terminées
 - Sauvegarde locale sur le téléphone (aucun compte, aucune donnée envoyée sur Internet)
-- Thème automatique : jour gris mat avec écriture noire, nuit noire avec écriture blanche, boutons orange
+- Thème : jour gris mat avec écriture noire, nuit noire avec écriture blanche ; automatique ou forcé, et couleur des boutons au choix (orange, bleu, vert, violet, rose) dans **Préférences**
+- **Rappels** : touche ⏰ à côté d'une tâche pour recevoir une notification à l'heure choisie
+- **Lecture à voix haute** : « 🔊 Écouter » sous chaque réponse de l'IA (voix française, vitesse réglable)
+- **Verrou** : empreinte, visage ou code du téléphone pour ouvrir l'app (dans Préférences)
 - Interface en français, accessible (lecteurs d'écran)
 - **Assistant IA gratuit** : décris un objectif, l'IA le découpe en tâches
 - **Chat** : jase avec des IA en 3 modes (Discussion, Écriture, Sujet), écriture fluide en direct, discussions sauvegardées

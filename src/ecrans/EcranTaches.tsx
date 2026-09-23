@@ -16,7 +16,8 @@ import { ElementTache } from '../components/ElementTache';
 import { useTaches } from '../hooks/useTaches';
 import { BoutonBureau, BoutonMenu } from '../navigation/Menu';
 import type { Couleurs } from '../theme';
-import type { Filtre } from '../types';
+import type { Filtre, Tache } from '../types';
+import { ChoixRappel } from '../rappels/ChoixRappel';
 
 const FILTRES: { cle: Filtre; libelle: string }[] = [
   { cle: 'toutes', libelle: 'Toutes' },
@@ -26,7 +27,9 @@ const FILTRES: { cle: Filtre; libelle: string }[] = [
 
 /** Écran Projet : les tâches (l'écran d'origine de Marceau). */
 export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
-  const { taches, chargement, ajouter, ajouterPlusieurs, basculer, supprimer, viderTerminees } = useTaches();
+  const { taches, chargement, ajouter, ajouterPlusieurs, basculer, supprimer, viderTerminees, definirRappel } =
+    useTaches();
+  const [tacheRappel, setTacheRappel] = useState<Tache | null>(null);
   const [saisie, setSaisie] = useState('');
   const [filtre, setFiltre] = useState<Filtre>('toutes');
   const [assistantOuvert, setAssistantOuvert] = useState(false);
@@ -140,6 +143,7 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
                 couleurs={couleurs}
                 onBasculer={basculer}
                 onSupprimer={supprimer}
+                onRappel={setTacheRappel}
               />
             )}
             ListEmptyComponent={
@@ -158,6 +162,15 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
           </Pressable>
         )}
       </KeyboardAvoidingView>
+      <ChoixRappel
+        tache={tacheRappel}
+        couleurs={couleurs}
+        onFermer={() => setTacheRappel(null)}
+        onChoisir={(date) => {
+          if (tacheRappel) definirRappel(tacheRappel.id, date);
+          setTacheRappel(null);
+        }}
+      />
       <AssistantIA
         visible={assistantOuvert}
         couleurs={couleurs}

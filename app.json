@@ -45,6 +45,18 @@
       ],
       "expo-secure-store",
       [
+        "expo-notifications",
+        {
+          "color": "#FF8A1F"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Marceau utilise Face ID pour protéger tes discussions et tes clés d'IA."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

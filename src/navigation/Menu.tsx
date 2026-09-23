@@ -5,13 +5,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconeBureau } from '../bureau/Bureau';
 import type { Couleurs } from '../theme';
 
-export type Section = 'chat' | 'codex' | 'projet' | 'parametres';
+export type Section = 'chat' | 'codex' | 'projet' | 'parametres' | 'preferences';
 
 export const SECTIONS: { cle: Section; icone: string; libelle: string }[] = [
   { cle: 'chat', icone: '💬', libelle: 'Chat' },
   { cle: 'codex', icone: '</>', libelle: 'Codex' },
   { cle: 'projet', icone: '📁', libelle: 'Projet' },
   { cle: 'parametres', icone: '⚙️', libelle: 'Paramètres' },
+  { cle: 'preferences', icone: '🎨', libelle: 'Préférences' },
 ];
 
 const MenuCtx = createContext<{ ouvrirMenu: () => void; ouvrirBureau: () => void } | null>(null);
