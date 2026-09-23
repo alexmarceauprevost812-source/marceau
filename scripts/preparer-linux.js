@@ -13,7 +13,10 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+
+const sha256 = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
 
 const DEPOTS = [
   'https://packages.termux.dev/apt/termux-main',
@@ -38,15 +41,31 @@ async function telecharger(chemin) {
   throw new Error(`${chemin} : ${derniere?.message}`);
 }
 
-/** Trouve le fichier .deb d'un paquet dans l'index « Packages ». */
+/** Trouve le fichier .deb d'un paquet et son SHA-256 dans l'index « Packages ». */
 function trouverPaquet(index, nom) {
   for (const bloc of index.split(/\n\n+/)) {
     if (new RegExp(`^Package: ${nom}$`, 'm').test(bloc)) {
-      const m = bloc.match(/^Filename: (.+)$/m);
-      if (m) return m[1].trim();
+      const fichier = bloc.match(/^Filename: (.+)$/m);
+      const empreinte = bloc.match(/^SHA256: ([0-9a-f]{64})$/m);
+      if (fichier && empreinte) return { fichier: fichier[1].trim(), empreinte: empreinte[1] };
     }
   }
-  throw new Error(`paquet ${nom} introuvable`);
+  throw new Error(`paquet ${nom} introuvable (ou sans SHA-256)`);
+}
+
+/** Télécharge un fichier et refuse de l'utiliser si son SHA-256 ne correspond pas. */
+async function telechargerVerifie(chemin, empreinte) {
+  const contenu = await telecharger(chemin);
+  if (sha256(contenu) !== empreinte) throw new Error(`${chemin} : empreinte SHA-256 différente, fichier refusé`);
+  return contenu;
+}
+
+/** SHA-256 de l'index « Packages » d'une architecture, lu dans le fichier « Release » du dépôt. */
+function empreinteIndex(release, arch) {
+  const section = release.split(/^SHA256:$/m)[1] ?? '';
+  const m = section.match(new RegExp(`^\\s*([0-9a-f]{64})\\s+\\d+\\s+main/binary-${arch}/Packages$`, 'm'));
+  if (!m) throw new Error(`empreinte de l'index ${arch} absente du fichier Release`);
+  return m[1];
 }
 
 /** Extrait l'archive data.tar.* d'un .deb (format « ar ») dans un dossier. */
@@ -70,9 +89,14 @@ function extraireDeb(deb, dossier) {
 
 async function preparer(arch, abi) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `proot-${arch}-`));
-  const index = (await telecharger(`dists/stable/main/binary-${arch}/Packages`)).toString();
+  // Chaîne de vérification : Release → empreinte de Packages → empreinte de chaque .deb.
+  const release = (await telecharger('dists/stable/Release')).toString();
+  const index = (
+    await telechargerVerifie(`dists/stable/main/binary-${arch}/Packages`, empreinteIndex(release, arch))
+  ).toString();
   for (const paquet of ['proot', 'libtalloc']) {
-    extraireDeb(await telecharger(trouverPaquet(index, paquet)), tmp);
+    const { fichier, empreinte } = trouverPaquet(index, paquet);
+    extraireDeb(await telechargerVerifie(fichier, empreinte), tmp);
   }
   const usr = path.join(tmp, PREFIXE);
   const sortie = path.join(DESTINATION, abi);

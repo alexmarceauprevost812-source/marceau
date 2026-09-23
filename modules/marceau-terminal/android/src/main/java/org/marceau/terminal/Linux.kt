@@ -13,6 +13,7 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.GZIPInputStream
+import java.security.MessageDigest
 
 /**
  * Option 4 : un vrai petit Linux (Alpine) dans l'appli, lancé avec PRoot.
@@ -48,11 +49,20 @@ internal object Linux {
     val base = "https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/$arch"
     progression("Recherche de la dernière version d'Alpine…", 0)
     val yaml = URL("$base/latest-releases.yaml").readText()
-    val fichier = Regex("""file:\s*(alpine-minirootfs-[^\s]+\.tar\.gz)""").find(yaml)?.groupValues?.get(1)
+    // Le fichier et son empreinte SHA-256 (le « sha256: » qui suit « file: » dans la même entrée).
+    val trouve = Regex("""file:\s*(alpine-minirootfs-[^\s]+\.tar\.gz)[\s\S]*?sha256:\s*([0-9a-fA-F]{64})""").find(yaml)
       ?: throw IOException("Version d'Alpine introuvable")
+    val fichier = trouve.groupValues[1]
+    val empreinte = trouve.groupValues[2].lowercase()
 
     val archive = File(ctx.cacheDir, fichier)
     telecharger("$base/$fichier", archive) { p -> progression("Téléchargement d'Alpine…", p) }
+
+    progression("Vérification du fichier…", 100)
+    if (sha256(archive) != empreinte) {
+      archive.delete()
+      throw IOException("Le fichier d'Alpine téléchargé est corrompu ou modifié (empreinte SHA-256 différente). Réessaie.")
+    }
 
     progression("Installation des fichiers…", 100)
     val racine = racine(ctx)
@@ -77,6 +87,19 @@ internal object Linux {
 
     supprimerSansSuivre(racine)
     if (!temporaire.renameTo(racine)) throw IOException("Impossible de finaliser l'installation")
+  }
+
+  private fun sha256(f: File): String {
+    val md = MessageDigest.getInstance("SHA-256")
+    f.inputStream().use { entree ->
+      val tampon = ByteArray(64 * 1024)
+      while (true) {
+        val n = entree.read(tampon)
+        if (n < 0) break
+        md.update(tampon, 0, n)
+      }
+    }
+    return md.digest().joinToString("") { "%02x".format(it) }
   }
 
   fun supprimer(ctx: Context) {

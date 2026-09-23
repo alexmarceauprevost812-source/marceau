@@ -23,22 +23,31 @@ export function numeroInstalle(): number {
 /** true seulement dans le vrai APK Marceau (pas dans Expo Go ni sur iOS). */
 const verifiable = () => Platform.OS === 'android' && Application.applicationId === ID_APPLICATION;
 
+type VersionGithub = { tag_name?: string; name?: string; body?: string; assets?: { name?: string; browser_download_url: string }[] };
+
+/**
+ * Cherche la version build-N la plus haute. On ne se fie pas à la « dernière version » de
+ * GitHub : quand deux constructions se terminent presque en même temps, la plus ancienne
+ * peut être publiée en dernier et devenir « la dernière ».
+ */
 async function chercherDerniereVersion(): Promise<InfoMaj | null> {
-  const r = await fetch(`https://api.github.com/repos/${DEPOT}/releases/latest`, {
+  const r = await fetch(`https://api.github.com/repos/${DEPOT}/releases?per_page=30`, {
     headers: { Accept: 'application/vnd.github+json' },
   });
   if (r.status === 404) return null; // aucune version publiée pour l'instant
   if (!r.ok) throw new Error(`GitHub a répondu ${r.status}`);
-  const v = await r.json();
-  const m = /^build-(\d+)$/.exec(v.tag_name ?? '');
-  const apk = (v.assets ?? []).find((a: { name?: string }) => a.name?.endsWith('.apk'));
-  if (!m || !apk) return null;
-  return {
-    numero: parseInt(m[1], 10),
-    nom: v.name || v.tag_name,
-    notes: (v.body ?? '').trim(),
-    urlApk: apk.browser_download_url,
-  };
+  const versions: VersionGithub[] = await r.json();
+  let meilleure: InfoMaj | null = null;
+  for (const v of versions) {
+    const m = /^build-(\d+)$/.exec(v.tag_name ?? '');
+    const apk = (v.assets ?? []).find((a) => a.name?.endsWith('.apk'));
+    if (!m || !apk) continue;
+    const numero = parseInt(m[1], 10);
+    if (!meilleure || numero > meilleure.numero) {
+      meilleure = { numero, nom: v.name || v.tag_name || '', notes: (v.body ?? '').trim(), urlApk: apk.browser_download_url };
+    }
+  }
+  return meilleure;
 }
 
 type Contexte = { maj: EtatMaj; verifier: (silencieux?: boolean) => Promise<void>; installer: () => void };
