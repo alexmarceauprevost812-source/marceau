@@ -32,10 +32,17 @@ dans le terminal.
 
 ## Construire l'application (APK / IPA)
 
-Avec [EAS Build](https://docs.expo.dev/build/introduction/) :
+**Avec GitHub Actions** (APK Android, gratuit) : ouvrez l'onglet *Actions* du dépôt,
+choisissez « Construire l'APK Android » puis *Run workflow*. L'APK est téléchargeable
+dans les *artifacts* de l'exécution. Pousser un tag `v*` (ex. `v1.0.0`) construit aussi
+l'APK et le joint automatiquement à la version GitHub.
+
+**Avec [EAS Build](https://docs.expo.dev/build/introduction/)** (profils définis dans `eas.json`) :
 
 ```bash
-npx eas-cli@latest build --platform android   # ou ios
+npx eas-cli@latest build --platform android --profile apk          # APK à installer directement
+npx eas-cli@latest build --platform android --profile production   # AAB pour Google Play
+npx eas-cli@latest build --platform ios --profile production       # iOS
 ```
 
 ## Structure du projet
