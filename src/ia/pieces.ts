@@ -33,9 +33,21 @@ function dossierPieces(): Directory {
   return d;
 }
 
+/** Lit une adresse web temporaire (blob:) et la convertit en data URL, qui survit au rechargement. */
+async function enDataUrl(uri: string): Promise<string> {
+  if (uri.startsWith('data:')) return uri;
+  const blob = await (await fetch(uri)).blob();
+  return new Promise((resoudre, rejeter) => {
+    const lecteur = new FileReader();
+    lecteur.onload = () => resoudre(String(lecteur.result));
+    lecteur.onerror = () => rejeter(lecteur.error ?? new Error('Lecture du fichier impossible.'));
+    lecteur.readAsDataURL(blob);
+  });
+}
+
 /** Copie un fichier temporaire dans le dossier permanent de l'appli. */
-function garder(uri: string, nom: string): string {
-  if (Platform.OS === 'web') return uri;
+async function garder(uri: string, nom: string): Promise<string> {
+  if (Platform.OS === 'web') return enDataUrl(uri);
   const source = new File(uri);
   const destination = new File(dossierPieces(), `${id()}-${nom.replace(/[^\w.-]/g, '_')}`);
   source.copySync(destination);
@@ -59,7 +71,7 @@ export async function choisirImages(): Promise<PieceJointe[]> {
       : [];
     const image = await manipulateAsync(a.uri, redim, { compress: 0.75, format: SaveFormat.JPEG });
     const nom = (a.fileName ?? 'photo').replace(/\.\w+$/, '') + '.jpg';
-    pieces.push({ id: id(), type: 'image', nom, mime: 'image/jpeg', uri: garder(image.uri, nom) });
+    pieces.push({ id: id(), type: 'image', nom, mime: 'image/jpeg', uri: await garder(image.uri, nom) });
   }
   return pieces;
 }
@@ -75,7 +87,7 @@ export async function prendrePhoto(): Promise<PieceJointe[]> {
     compress: 0.75,
     format: SaveFormat.JPEG,
   });
-  return [{ id: id(), type: 'image', nom: 'photo.jpg', mime: 'image/jpeg', uri: garder(image.uri, 'photo.jpg') }];
+  return [{ id: id(), type: 'image', nom: 'photo.jpg', mime: 'image/jpeg', uri: await garder(image.uri, 'photo.jpg') }];
 }
 
 /** Choisir des fichiers (texte, code, PDF, images). */
@@ -87,10 +99,10 @@ export async function choisirFichiers(): Promise<PieceJointe[]> {
     const mime = a.mimeType ?? '';
     if (mime.startsWith('image/')) {
       const image = await manipulateAsync(a.uri, [], { compress: 0.75, format: SaveFormat.JPEG });
-      pieces.push({ id: id(), type: 'image', nom: a.name, mime: 'image/jpeg', uri: garder(image.uri, a.name) });
+      pieces.push({ id: id(), type: 'image', nom: a.name, mime: 'image/jpeg', uri: await garder(image.uri, a.name) });
     } else if (mime === 'application/pdf' || /\.pdf$/i.test(a.name)) {
       if ((a.size ?? 0) > TAILLE_MAX_PDF) throw new Error(`« ${a.name} » est trop gros (20 Mo maximum).`);
-      pieces.push({ id: id(), type: 'pdf', nom: a.name, mime: 'application/pdf', uri: garder(a.uri, a.name) });
+      pieces.push({ id: id(), type: 'pdf', nom: a.name, mime: 'application/pdf', uri: await garder(a.uri, a.name) });
     } else if (mime.startsWith('text/') || EXTENSIONS_TEXTE.test(a.name) || mime.includes('json') || mime.includes('xml')) {
       pieces.push({ id: id(), type: 'texte', nom: a.name, mime: mime || 'text/plain', texte: await lireTexte(a.uri) });
     } else {

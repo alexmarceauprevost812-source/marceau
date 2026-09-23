@@ -16,7 +16,7 @@ import {
 import { useTexteFluide } from '../hooks/useTexteFluide';
 import { discuter, ReponseInterrompue, sansReflexion, type MessageIA } from '../ia/client';
 import { FOURNISSEURS, manqueCle, type Espace } from '../ia/fournisseurs';
-import { choisirFichiers, choisirImages, prendrePhoto, type PieceJointe } from '../ia/pieces';
+import { choisirFichiers, choisirImages, prendrePhoto, supprimerPieces, type PieceJointe } from '../ia/pieces';
 import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 import { Markdown, type BlocCode } from './Markdown';
@@ -317,7 +317,11 @@ export function Discussion({
                   {p.nom}
                 </Text>
                 <Pressable
-                  onPress={() => setPieces((prev) => prev.filter((x) => x.id !== p.id))}
+                  onPress={() => {
+                    // La photo ou le PDF a déjà été copié sur le téléphone : on efface la copie.
+                    supprimerPieces([p]);
+                    setPieces((prev) => prev.filter((x) => x.id !== p.id));
+                  }}
                   hitSlop={8}
                   accessibilityLabel={`Retirer ${p.nom}`}
                 >

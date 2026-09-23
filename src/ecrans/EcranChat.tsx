@@ -104,18 +104,18 @@ export function EcranChat({ couleurs: c }: { couleurs: Couleurs }) {
             </Text>
           }
           onMessages={(messages) =>
-            setConversations((prev) =>
-              prev.map((x) =>
-                x.id === courante.id
-                  ? {
-                      ...x,
-                      messages,
-                      majLe: Date.now(),
-                      titre: x.titre || (messages[0]?.content ?? '').replace(/\s+/g, ' ').slice(0, 48),
-                    }
-                  : x,
-              ),
-            )
+            setConversations((prev) => {
+              const maj = (x: Conversation): Conversation => ({
+                ...x,
+                messages,
+                majLe: Date.now(),
+                titre: x.titre || (messages[0]?.content ?? '').replace(/\s+/g, ' ').slice(0, 48),
+              });
+              // Une discussion neuve quittée pendant son premier échange a déjà été retirée
+              // (les discussions vides ne sont pas gardées) : on la remet avec ses messages.
+              if (!prev.some((x) => x.id === courante.id)) return messages.length ? [maj(courante), ...prev] : prev;
+              return prev.map((x) => (x.id === courante.id ? maj(x) : x));
+            })
           }
         />
         <Studio html={studio?.html ?? null} titre={studio?.titre ?? ''} couleurs={c} onFermer={() => setStudio(null)} />

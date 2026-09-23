@@ -46,6 +46,38 @@ async function api<T>(url: string, jeton?: string): Promise<T> {
   return reponse.json() as Promise<T>;
 }
 
+/**
+ * Trouve le commit d'une référence écrite après « /tree/ ». Une branche peut contenir des
+ * « / » (feature/foo) et l'adresse peut continuer vers un dossier : on essaie du plus long
+ * au plus court jusqu'à trouver une branche, un tag ou un commit qui existe.
+ */
+async function resoudreReference(
+  proprio: string,
+  depot: string,
+  reference: string,
+  jeton?: string,
+): Promise<{ branche: string; commit: string; arbre: string }> {
+  const morceaux = reference.split('/').filter(Boolean);
+  for (let n = morceaux.length; n >= 1; n--) {
+    const essai = morceaux.slice(0, n).join('/');
+    const r = await fetch(`https://api.github.com/repos/${proprio}/${depot}/commits/${encodeURIComponent(essai)}`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        ...(jeton?.trim() ? { Authorization: `Bearer ${jeton.trim()}` } : {}),
+      },
+    });
+    if (r.status === 404 || r.status === 422) continue;
+    if (r.status === 401) throw new Error('Jeton GitHub refusé.');
+    if (r.status === 403 || r.status === 429) {
+      throw new Error('Limite de GitHub atteinte (60 demandes par heure sans jeton). Réessaie plus tard ou ajoute un jeton.');
+    }
+    if (!r.ok) throw new Error(`Erreur GitHub ${r.status}.`);
+    const j = (await r.json()) as { sha: string; commit: { tree: { sha: string } } };
+    return { branche: essai, commit: j.sha, arbre: j.commit.tree.sha };
+  }
+  throw new Error(`Branche introuvable : « ${reference} ».`);
+}
+
 /** Télécharge les fichiers texte d'un dépôt GitHub (public, ou privé avec un jeton). */
 export async function importerDepot(
   adresse: string,
@@ -60,9 +92,10 @@ export async function importerDepot(
     `https://api.github.com/repos/${proprio}/${depot}`,
     jeton,
   );
-  const branche = lu.branche ?? infos.default_branch;
+  const ref = await resoudreReference(proprio, depot, lu.branche ?? infos.default_branch, jeton);
+  const branche = ref.branche;
   const arbre = await api<{ tree: { path: string; type: string; size?: number }[]; truncated: boolean }>(
-    `https://api.github.com/repos/${proprio}/${depot}/git/trees/${encodeURI(branche)}?recursive=1`,
+    `https://api.github.com/repos/${proprio}/${depot}/git/trees/${ref.arbre}?recursive=1`,
     jeton,
   );
 
@@ -89,7 +122,7 @@ export async function importerDepot(
   let fait = 0;
   const maintenant = Date.now();
   const brut = (chemin: string) =>
-    `https://raw.githubusercontent.com/${proprio}/${depot}/${encodeURI(branche)}/${chemin
+    `https://raw.githubusercontent.com/${proprio}/${depot}/${ref.commit}/${chemin
       .split('/')
       .map(encodeURIComponent)
       .join('/')}`;
