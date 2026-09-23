@@ -32,10 +32,25 @@ dans le terminal.
 
 ## Construire l'application (APK / IPA)
 
-Avec [EAS Build](https://docs.expo.dev/build/introduction/) :
+**Avec GitHub Actions** (APK Android, gratuit, signé par EAS). Configuration à faire une fois :
+
+1. `npx eas-cli login` puis `npx eas-cli init` (ajoute l'identifiant du projet EAS dans
+   `app.json`) et commitez `app.json`.
+2. Créez un jeton sur [expo.dev](https://expo.dev/settings/access-tokens) et ajoutez-le
+   au dépôt comme secret `EXPO_TOKEN` (*Settings → Secrets and variables → Actions*).
+
+Ensuite : onglet *Actions* → « Construire l'APK Android » → *Run workflow*. L'APK est
+téléchargeable dans les *artifacts* de l'exécution. Pousser un tag `v*` (ex. `v1.0.0`)
+construit aussi l'APK et le joint à la version GitHub. La clé de signature est créée et
+conservée par EAS au premier build : les APK restent compatibles entre eux et avec les
+builds EAS.
+
+**Avec [EAS Build](https://docs.expo.dev/build/introduction/)** (profils définis dans `eas.json`) :
 
 ```bash
-npx eas-cli@latest build --platform android   # ou ios
+npx eas-cli@latest build --platform android --profile apk          # APK à installer directement
+npx eas-cli@latest build --platform android --profile production   # AAB pour Google Play
+npx eas-cli@latest build --platform ios --profile production       # iOS
 ```
 
 ## Structure du projet
