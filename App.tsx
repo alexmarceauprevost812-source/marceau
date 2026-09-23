@@ -61,10 +61,10 @@ function Ecran() {
               accessibilityLabel="Ouvrir l'assistant IA"
               style={({ pressed }) => [
                 styles.boutonIA,
-                { borderColor: couleurs.accent, opacity: pressed ? 0.7 : 1 },
+                { backgroundColor: couleurs.accent, opacity: pressed ? 0.8 : 1 },
               ]}
             >
-              <Text style={[styles.boutonIATexte, { color: couleurs.accent }]}>✨ IA</Text>
+              <Text style={[styles.boutonIATexte, { color: couleurs.surAccent }]}>✨ IA</Text>
             </Pressable>
           </View>
           <Text style={[styles.sousTitre, { color: couleurs.texteDoux }]}>
@@ -126,7 +126,7 @@ function Ecran() {
         </View>
 
         {chargement ? (
-          <ActivityIndicator style={styles.chargement} color={couleurs.accent} />
+          <ActivityIndicator style={styles.chargement} color={couleurs.accentTexte} />
         ) : (
           <FlatList
             data={visibles}
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   entete: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
   ligneTitre: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   titre: { fontSize: 32, fontWeight: '800' },
-  boutonIA: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5 },
+  boutonIA: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999 },
   boutonIATexte: { fontSize: 15, fontWeight: '700' },
   sousTitre: { fontSize: 15, marginTop: 4 },
   formulaire: { flexDirection: 'row', paddingHorizontal: 20, gap: 10 },

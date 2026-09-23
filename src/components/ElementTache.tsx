@@ -23,8 +23,8 @@ export function ElementTache({ tache, couleurs, onBasculer, onSupprimer }: Props
         <View
           style={[
             styles.case,
-            { borderColor: couleurs.accent },
-            tache.terminee && { backgroundColor: couleurs.accent },
+            { borderColor: couleurs.accentTexte },
+            tache.terminee && { backgroundColor: couleurs.accent, borderColor: couleurs.accent },
           ]}
         >
           {tache.terminee && <Text style={[styles.coche, { color: couleurs.surAccent }]}>✓</Text>}

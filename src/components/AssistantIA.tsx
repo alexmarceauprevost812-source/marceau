@@ -98,7 +98,7 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
         <KeyboardAvoidingView style={styles.ecran} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.barre}>
             <Pressable onPress={fermer} hitSlop={12} accessibilityRole="button">
-              <Text style={[styles.lien, { color: c.accent }]}>Fermer</Text>
+              <Text style={[styles.lien, { color: c.accentTexte }]}>Fermer</Text>
             </Pressable>
             <Text style={[styles.titreBarre, { color: c.texte }]}>
               {vue === 'assistant' ? 'Assistant IA' : 'Réglages IA'}
@@ -108,7 +108,7 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
               hitSlop={12}
               accessibilityRole="button"
             >
-              <Text style={[styles.lien, { color: c.accent }]}>{vue === 'assistant' ? 'Réglages' : 'Enregistrer'}</Text>
+              <Text style={[styles.lien, { color: c.accentTexte }]}>{vue === 'assistant' ? 'Réglages' : 'Enregistrer'}</Text>
             </Pressable>
           </View>
 
@@ -160,7 +160,7 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
                   accessibilityState={{ checked: p.choisie }}
                   style={[styles.ligne, { backgroundColor: c.carte, borderColor: c.bordure }]}
                 >
-                  <View style={[styles.case, { borderColor: c.accent }, p.choisie && { backgroundColor: c.accent }]}>
+                  <View style={[styles.case, { borderColor: c.accentTexte }, p.choisie && { backgroundColor: c.accent }]}>
                     {p.choisie && <Text style={{ color: c.surAccent, fontWeight: '700' }}>✓</Text>}
                   </View>
                   <Text style={[styles.texteLigne, { color: c.texte }]}>{p.texte}</Text>
@@ -254,7 +254,7 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
                     accessibilityLabel="Clé API"
                   />
                   <Pressable onPress={() => Linking.openURL('https://opencode.ai/auth')} accessibilityRole="link">
-                    <Text style={[styles.lien, { color: c.accent, marginTop: 8 }]}>Obtenir une clé gratuite →</Text>
+                    <Text style={[styles.lien, { color: c.accentTexte, marginTop: 8 }]}>Obtenir une clé gratuite →</Text>
                   </Pressable>
                   <Text style={[styles.aide, { color: c.texteDoux, marginTop: 8 }]}>
                     La clé reste dans le coffre sécurisé de ton téléphone.
