@@ -76,12 +76,38 @@ internal object Linux {
     File(temporaire, "etc").mkdirs()
     File(temporaire, "etc/resolv.conf").apply { delete() }.writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n")
     File(temporaire, "root").mkdirs()
+
+    // Dépôts Alpine complets (main + community) : des milliers d'outils installables
+    // à la demande avec « apk add » (nmap, python3, git, nodejs, hydra, john…).
+    File(temporaire, "etc/apk").mkdirs()
+    File(temporaire, "etc/apk/repositories").writeText(
+      """
+      |https://dl-cdn.alpinelinux.org/alpine/latest-stable/main
+      |https://dl-cdn.alpinelinux.org/alpine/latest-stable/community
+      |""".trimMargin() + "\n",
+    )
+
     File(temporaire, "etc/profile.d").mkdirs()
     File(temporaire, "etc/profile.d/marceau.sh").writeText(
       """
       |export PS1='\[\e[38;5;208m\]linux\[\e[0m\]:\w \$ '
       |alias ll='ls -la'
-      |""".trimMargin(),
+      |# « outils » : rappelle comment installer des outils (tu choisis, tu télécharges).
+      |outils() {
+      |  echo 'Installe un outil avec :  apk add <nom>   (ex. apk add nmap)'
+      |  echo 'Mets à jour la liste des paquets une fois :  apk update'
+      |  echo
+      |  echo 'Réseau      : nmap tcpdump netcat-openbsd bind-tools curl wget'
+      |  echo 'Mots de passe: john hashcat hydra'
+      |  echo 'Wi-Fi       : aircrack-ng wireless-tools'
+      |  echo 'Web         : nikto sqlmap whatweb'
+      |  echo 'Programmation: python3 py3-pip git nodejs npm gcc make'
+      |  echo
+      |  echo 'Cherche un paquet :  apk search <mot>'
+      |  echo 'Sers-toi de ces outils uniquement sur TES appareils/réseaux ou avec autorisation écrite.'
+      |}
+      |echo 'Bienvenue dans Linux. Tape  outils  pour voir comment installer des programmes.'
+      |""".trimMargin() + "\n",
     )
     File(temporaire, MARQUEUR).writeText(fichier)
 
