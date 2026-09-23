@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Image, Linking, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { IconeBureau } from '../bureau/Bureau';
@@ -15,6 +15,11 @@ export const SECTIONS: { cle: Section; icone: string; libelle: string }[] = [
   { cle: 'terminal', icone: '>_', libelle: 'Terminal' },
   { cle: 'parametres', icone: '⚙️', libelle: 'Paramètres' },
   { cle: 'preferences', icone: '🎨', libelle: 'Préférences' },
+];
+
+/** Liens utiles ouverts dans le navigateur (documentation, catalogues…). */
+export const LIENS: { url: string; icone: string; libelle: string }[] = [
+  { url: 'https://www.kali.org/tools/', icone: '🧰', libelle: 'Outils Kali (doc)' },
 ];
 
 const MenuCtx = createContext<{ ouvrirMenu: () => void; ouvrirBureau: () => void } | null>(null);
@@ -134,6 +139,20 @@ export function MenuLateral({ visible, actif, couleurs: c, onChoisir, onFermer }
               );
             })}
           </View>
+          <View style={[styles.liste, styles.liens, { borderColor: c.bordure }]} accessibilityRole="menu">
+            {LIENS.map(({ url, icone, libelle }) => (
+              <Pressable
+                key={url}
+                onPress={() => Linking.openURL(url).catch(() => {})}
+                accessibilityRole="link"
+                style={({ pressed }) => [styles.element, { opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[styles.icone, { color: c.texte }]}>{icone}</Text>
+                <Text style={[styles.libelle, { color: c.texte }]}>{libelle}</Text>
+                <Text style={[styles.fleche, { color: c.texteDoux }]}>↗</Text>
+              </Pressable>
+            ))}
+          </View>
         </SafeAreaView>
       </Animated.View>
     </Modal>
@@ -149,6 +168,8 @@ const styles = StyleSheet.create({
   logo: { width: 132, height: 132, borderRadius: 66 },
   titre: { fontSize: 24, fontWeight: '800' },
   liste: { paddingHorizontal: 12, gap: 6 },
+  liens: { marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  fleche: { fontSize: 16, fontWeight: '700' },
   element: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, paddingVertical: 14, borderRadius: 14 },
   icone: { fontSize: 18, fontWeight: '800', width: 32, textAlign: 'center' },
   libelle: { fontSize: 17, fontWeight: '700' },
