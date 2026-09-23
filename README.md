@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon.png" alt="Logo de Marceau" width="160"></p>
+
 # Marceau
 
 Application mobile **open source** de gestion de tâches pour **Android** et **iOS**,
