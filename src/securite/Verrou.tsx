@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, AppState, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 
-import { usePreferences } from '../preferences';
+import { modifierPreferences, usePreferences } from '../preferences';
 import type { Couleurs } from '../theme';
 
 /** Temps passé hors de l'app avant de la reverrouiller (choisir une photo ne doit pas la verrouiller). */
@@ -26,6 +26,12 @@ export async function authentifier(raison: string): Promise<boolean> {
   return r.success;
 }
 
+/** true si le téléphone n'a plus ni empreinte, ni visage, ni code de verrouillage. */
+async function telephoneSansSecurite(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  return (await LocalAuthentication.getEnrolledLevelAsync()) === LocalAuthentication.SecurityLevel.NONE;
+}
+
 /** Écran de verrouillage par empreinte / visage / code, par-dessus toute l'application. */
 export function Verrou({ couleurs: c }: { couleurs: Couleurs }) {
   const { prefs, pret } = usePreferences();
@@ -39,6 +45,18 @@ export function Verrou({ couleurs: c }: { couleurs: Couleurs }) {
     enCours.current = true;
     setErreur('');
     try {
+      // Porte de sortie : si le téléphone n'a plus aucune sécurité, le verrou ne pourrait jamais
+      // être levé. On le désactive (retirer le code du téléphone demande déjà de le connaître).
+      if (await telephoneSansSecurite()) {
+        modifierPreferences({ verrou: false });
+        setVerrouille(false);
+        Alert.alert(
+          'Verrou désactivé',
+          'Ton téléphone n’a plus d’empreinte, de visage ni de code de verrouillage : le verrou de Marceau a été désactivé. ' +
+            'Ajoute une sécurité au téléphone puis réactive-le dans Préférences.',
+        );
+        return;
+      }
       if (await authentifier('Déverrouiller Marceau')) setVerrouille(false);
       else setErreur('Identification annulée ou refusée.');
     } catch (e) {
