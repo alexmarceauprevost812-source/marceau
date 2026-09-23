@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
+import { sauvegarder } from '../hooks/usePersistant';
+
 import {
   connexionActive,
   ORDRE_FOURNISSEURS,
@@ -67,7 +69,7 @@ export function ReglagesIAProvider({
         ORDRE_FOURNISSEURS.map((id) => [id, { url: r.configs[id].url, modele: r.configs[id].modele }]),
       ),
     };
-    await AsyncStorage.setItem(CLE_REGLAGES, JSON.stringify(sansCles)).catch(() => {});
+    await sauvegarder(CLE_REGLAGES, sansCles);
     for (const id of ORDRE_FOURNISSEURS) {
       const cle = r.configs[id].cle.trim();
       if (cle) await SecureStore.setItemAsync(cleSecrete(id), cle).catch(() => {});

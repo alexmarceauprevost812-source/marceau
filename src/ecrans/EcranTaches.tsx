@@ -14,6 +14,7 @@ import {
 import { AssistantIA } from '../components/AssistantIA';
 import { ElementTache } from '../components/ElementTache';
 import { useTaches } from '../hooks/useTaches';
+import { BoutonMenu } from '../navigation/Menu';
 import type { Couleurs } from '../theme';
 import type { Filtre } from '../types';
 
@@ -23,7 +24,7 @@ const FILTRES: { cle: Filtre; libelle: string }[] = [
   { cle: 'terminees', libelle: 'Terminées' },
 ];
 
-/** Écran des tâches (l'écran d'origine de Marceau). */
+/** Écran Projet : les tâches (l'écran d'origine de Marceau). */
 export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
   const { taches, chargement, ajouter, ajouterPlusieurs, basculer, supprimer, viderTerminees } = useTaches();
   const [saisie, setSaisie] = useState('');
@@ -52,7 +53,8 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
       >
         <View style={styles.entete}>
           <View style={styles.ligneTitre}>
-            <Text style={[styles.titre, { color: couleurs.texte }]}>Marceau</Text>
+            <BoutonMenu couleurs={couleurs} />
+            <Text style={[styles.titre, styles.titreFlex, { color: couleurs.texte }]}>Projet</Text>
             <Pressable
               onPress={() => setAssistantOuvert(true)}
               accessibilityRole="button"
@@ -171,8 +173,9 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
 const styles = StyleSheet.create({
   ecran: { flex: 1 },
   entete: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
-  ligneTitre: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  ligneTitre: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   titre: { fontSize: 32, fontWeight: '800' },
+  titreFlex: { flex: 1 },
   boutonIA: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999 },
   boutonIATexte: { fontSize: 15, fontWeight: '700' },
   sousTitre: { fontSize: 15, marginTop: 4 },

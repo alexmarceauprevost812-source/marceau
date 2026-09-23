@@ -63,6 +63,14 @@ function erreurReseau(e: unknown, c: Connexion) {
   );
 }
 
+/** La réponse a commencé puis la connexion a été coupée : `texte` contient le début reçu. */
+export class ReponseInterrompue extends Error {
+  constructor(public texte: string) {
+    super('La connexion a été coupée pendant la réponse : elle est incomplète. Réessaie.');
+    this.name = 'ReponseInterrompue';
+  }
+}
+
 /** Envoie une conversation à l'IA et renvoie la réponse complète (en direct si onMorceau est fourni). */
 export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<string> {
   const format = FOURNISSEURS[c.fournisseur].format;
@@ -135,6 +143,8 @@ export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<stri
   } catch (e) {
     if ((e as Error)?.name === 'AbortError') return texte;
     if (!texte) throw e instanceof Error && e.message ? e : erreurReseau(e, c);
+    // Connexion coupée en cours de route : on ne fait pas passer le début pour une réponse complète.
+    throw new ReponseInterrompue(texte);
   }
   const reste = morceauSSE(tampon, format);
   if (reste) {

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { sauvegarder } from './usePersistant';
+
 import type { Tache } from '../types';
 
 const CLE_STOCKAGE = 'marceau:taches';
@@ -24,7 +26,7 @@ export function useTaches() {
 
   useEffect(() => {
     if (chargement) return;
-    AsyncStorage.setItem(CLE_STOCKAGE, JSON.stringify(taches)).catch(() => {});
+    sauvegarder(CLE_STOCKAGE, taches);
   }, [taches, chargement]);
 
   const ajouter = useCallback((texte: string) => {

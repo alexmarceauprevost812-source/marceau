@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FOURNISSEURS } from '../ia/fournisseurs';
 import { useReglagesIA } from '../ia/ReglagesContexte';
+import { BoutonMenu } from '../navigation/Menu';
 import type { Couleurs } from '../theme';
 
 type Props = {
@@ -13,11 +14,12 @@ type Props = {
   droite?: ReactNode;
 };
 
-/** En-tête d'écran avec retour optionnel et puce de l'IA active. */
+/** En-tête d'écran : bouton menu ☰ (ou retour) et puce de l'IA active. */
 export function Entete({ couleurs: c, titre, sousTitre, onRetour, droite }: Props) {
   return (
     <View style={styles.entete}>
       <View style={styles.ligne}>
+        {!onRetour && <BoutonMenu couleurs={c} />}
         {onRetour && (
           <Pressable onPress={onRetour} hitSlop={12} accessibilityRole="button" accessibilityLabel="Retour">
             <Text style={[styles.retour, { color: c.accentTexte }]}>‹</Text>

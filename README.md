@@ -19,7 +19,7 @@ construite avec [Expo](https://expo.dev) et React Native.
 
 ## Assistant IA
 
-Touchez **✨ IA** dans les tâches, ou ouvrez les onglets **Chat** et **Codex**. L'IA se choisit dans *Réglages IA* (la puce en haut à droite) :
+L'application s'ouvre sur le **Chat**. Le menu **☰** en haut à gauche mène au Chat, à **Codex**, à **Projet** (les tâches, avec le bouton **✨ IA**) et aux **Paramètres**. L'IA se choisit dans les Paramètres ou avec la puce en haut à droite :
 
 | Fournisseur | Coût | Clé | Où tourne l'IA |
 |---|---|---|---|

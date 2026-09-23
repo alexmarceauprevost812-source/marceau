@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 
-import { discuter, sansReflexion, type MessageIA } from '../ia/client';
+import { discuter, ReponseInterrompue, sansReflexion, type MessageIA } from '../ia/client';
 import { manqueCle } from '../ia/fournisseurs';
 import { useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
@@ -84,6 +84,15 @@ export function Discussion({
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') {
         onMessages(historique);
+      } else if (e instanceof ReponseInterrompue) {
+        // On garde le début reçu, clairement marqué comme incomplet.
+        const debut = sansReflexion(e.texte).trim();
+        onMessages(
+          debut
+            ? [...historique, { role: 'assistant', content: `${debut}\n\n_(Réponse interrompue : la connexion a été coupée.)_` }]
+            : historique,
+        );
+        setErreur(e.message);
       } else {
         setErreur((e as Error).message);
         setSaisie(contenu);
