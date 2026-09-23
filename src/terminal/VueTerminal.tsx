@@ -10,7 +10,15 @@ import { XTERM_CSS, XTERM_FIT_JS, XTERM_JS } from './xtermBundle';
  */
 export type ModeSaisie = 'brut' | 'ligne';
 
-export type Theme = { fond: string; texte: string; curseur: string; selection: string };
+export type Theme = {
+  fond: string;
+  /** Couleur des réponses (sortie des programmes). */
+  texte: string;
+  /** Couleur de ce que l'utilisateur tape. */
+  saisie: string;
+  curseur: string;
+  selection: string;
+};
 
 export type PoigneeTerminal = {
   ecrire: (texte: string) => void;
@@ -39,6 +47,12 @@ type Props = {
   onCtrlUtilise?: () => void;
 };
 
+/** « #RRGGBB » → séquence de couleur de texte (24 bits). */
+function ansi(hex: string) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return `\x1b[38;2;${(n >> 16) & 255};${(n >> 8) & 255};${n & 255}m`;
+}
+
 function page(mode: ModeSaisie, t: Theme) {
   return `<!doctype html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -52,6 +66,9 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
 <script>
 (function(){
   var MODE = ${JSON.stringify(mode)};
+  var SAISIE = ${JSON.stringify(ansi(t.saisie))};
+  var FIN_SAISIE = '\\x1b[39m';
+  var blanc = function(s){ return SAISIE + s + FIN_SAISIE; };
   var envoyer = function(m){ window.ReactNativeWebView.postMessage(JSON.stringify(m)); };
   var term = new Terminal({
     cursorBlink: true,
@@ -92,7 +109,7 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
   var ligne = '', historique = [], position = 0;
   function remplacerLigne(nouvelle){
     for (var i = 0; i < Array.from(ligne).length; i++) term.write('\\b \\b');
-    ligne = nouvelle; term.write(ligne);
+    ligne = nouvelle; term.write(blanc(ligne));
   }
   function saisieLigne(d){
     if (d.charAt(0) === '\\x1b') {
@@ -116,19 +133,38 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
       } else if (c === '\\x0c') {
         term.clear();
       } else if (c >= ' ' || c === '\\t') {
-        ligne += c; term.write(c);
+        ligne += c; term.write(blanc(c));
       }
     }
+  }
+
+  // Mode brut : le programme renvoie lui-même ce qu'on tape (écho).
+  // On retient les caractères tapés pour colorer leur écho en blanc.
+  var tapes = '';
+  function retenir(d){
+    if (d.length > 0 && d.charAt(0) !== '\\x1b' && d.charCodeAt(0) >= 32 && d.indexOf('\\r') < 0) {
+      tapes = (tapes + d).slice(-512);
+    } else {
+      tapes = ''; // Entrée, flèches, Ctrl… : on repart à zéro
+    }
+  }
+  function colorerEcho(t){
+    if (!tapes || MODE !== 'brut') return t;
+    var n = 0;
+    while (n < t.length && n < tapes.length && t.charAt(n) === tapes.charAt(n)) n++;
+    if (n === 0) return t;
+    tapes = tapes.slice(n);
+    return blanc(t.slice(0, n)) + t.slice(n);
   }
 
   term.onData(function(d){
     d = appliquerCtrl(d);
     if (MODE === 'ligne') saisieLigne(d);
-    else envoyer({ type: 'entree', donnees: d });
+    else { retenir(d); envoyer({ type: 'entree', donnees: d }); }
   });
 
   window.M = {
-    ecrire: function(t){ term.write(t); },
+    ecrire: function(t){ term.write(colorerEcho(t)); },
     effacer: function(){ term.clear(); },
     focus: function(){ term.focus(); },
     touche: function(s){ term.input(s, true); },

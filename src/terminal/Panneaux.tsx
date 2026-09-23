@@ -19,12 +19,13 @@ import type { Couleurs } from '../theme';
 import { BarreTouches } from './BarreTouches';
 import { VueTerminal, type PoigneeTerminal, type Theme } from './VueTerminal';
 
-/** Le terminal reste sombre (les couleurs des programmes sont prévues pour ça). */
+/** Terminal : fond noir, réponses en vert lime, ce que tu tapes en blanc. */
 export const THEME_TERMINAL: Theme = {
   fond: '#000000',
-  texte: '#E8E8E8',
-  curseur: '#FF8A1F',
-  selection: 'rgba(255,138,31,0.35)',
+  texte: '#A6FF00',
+  saisie: '#FFFFFF',
+  curseur: '#FFFFFF',
+  selection: 'rgba(166,255,0,0.3)',
 };
 
 const GRIS = (t: string) => `\x1b[2m${t}\x1b[0m`;
