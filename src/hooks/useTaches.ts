@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { sauvegarder } from './usePersistant';
+import { annulerRappel, programmerRappel } from '../rappels/notifications';
 
 import type { Tache } from '../types';
 
@@ -14,6 +16,8 @@ function nouvelId() {
 export function useTaches() {
   const [taches, setTaches] = useState<Tache[]>([]);
   const [chargement, setChargement] = useState(true);
+  const courantes = useRef<Tache[]>([]);
+  courantes.current = taches;
 
   useEffect(() => {
     AsyncStorage.getItem(CLE_STOCKAGE)
@@ -48,18 +52,45 @@ export function useTaches() {
   }, []);
 
   const basculer = useCallback((id: string) => {
+    const t = courantes.current.find((x) => x.id === id);
+    // Une tâche terminée n'a plus besoin de son rappel.
+    if (t && !t.terminee && t.rappel) annulerRappel(t.rappel.id);
     setTaches((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, terminee: !t.terminee } : t)),
+      prev.map((t) =>
+        t.id === id ? { ...t, terminee: !t.terminee, rappel: t.terminee ? t.rappel : undefined } : t,
+      ),
     );
   }, []);
 
   const supprimer = useCallback((id: string) => {
+    annulerRappel(courantes.current.find((x) => x.id === id)?.rappel?.id);
     setTaches((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const viderTerminees = useCallback(() => {
+    courantes.current.filter((t) => t.terminee).forEach((t) => annulerRappel(t.rappel?.id));
     setTaches((prev) => prev.filter((t) => !t.terminee));
   }, []);
 
-  return { taches, chargement, ajouter, ajouterPlusieurs, basculer, supprimer, viderTerminees };
+  /** Programme (ou retire, avec null) le rappel d'une tâche. */
+  const definirRappel = useCallback(async (id: string, date: Date | null) => {
+    const t = courantes.current.find((x) => x.id === id);
+    if (!t) return;
+    await annulerRappel(t.rappel?.id);
+    let rappel: Tache['rappel'];
+    if (date) {
+      const idNotif = await programmerRappel('⏰ Rappel Marceau', t.texte, date);
+      if (!idNotif) {
+        Alert.alert(
+          'Notifications bloquées',
+          'Autorise les notifications de Marceau dans les réglages du téléphone pour recevoir les rappels.',
+        );
+        return;
+      }
+      rappel = { date: date.getTime(), id: idNotif };
+    }
+    setTaches((prev) => prev.map((x) => (x.id === id ? { ...x, rappel } : x)));
+  }, []);
+
+  return { taches, chargement, ajouter, ajouterPlusieurs, basculer, supprimer, viderTerminees, definirRappel };
 }

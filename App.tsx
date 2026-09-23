@@ -6,18 +6,22 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Bureau } from './src/bureau/Bureau';
 import { EcranChat } from './src/ecrans/EcranChat';
 import { EcranCodex } from './src/ecrans/EcranCodex';
+import { EcranPreferences } from './src/ecrans/EcranPreferences';
 import { EcranReglages } from './src/ecrans/EcranReglages';
 import { EcranTaches } from './src/ecrans/EcranTaches';
 import type { Espace } from './src/ia/fournisseurs';
 import { ReglagesIAProvider } from './src/ia/ReglagesContexte';
 import { MiseAJourProvider } from './src/maj/miseAJour';
 import { MenuLateral, MenuProvider, type Section } from './src/navigation/Menu';
-import { useCouleurs } from './src/theme';
+import { Verrou } from './src/securite/Verrou';
+import { useCouleurs, useModeNuit } from './src/theme';
 
-type Ecran = Exclude<Section, 'parametres'>;
+type Ecran = Exclude<Section, 'parametres' | 'preferences'>;
 
 export default function App() {
   const couleurs = useCouleurs();
+  const nuit = useModeNuit();
+  const [preferencesOuvertes, setPreferencesOuvertes] = useState(false);
   // L'application s'ouvre toujours sur le Chat.
   const [ecran, setEcran] = useState<Ecran>('chat');
   const [menuOuvert, setMenuOuvert] = useState(false);
@@ -32,6 +36,7 @@ export default function App() {
     setBureauOuvert(false);
     // Depuis le Codex, les Paramètres s'ouvrent sur l'IA du Codex.
     if (s === 'parametres') setReglagesOuverts(ecran === 'codex' ? 'codex' : 'chat');
+    else if (s === 'preferences') setPreferencesOuvertes(true);
     else setEcran(s);
   };
 
@@ -55,7 +60,7 @@ export default function App() {
 
           <MenuLateral
             visible={menuOuvert}
-            actif={reglagesOuverts ? 'parametres' : ecran}
+            actif={preferencesOuvertes ? 'preferences' : reglagesOuverts ? 'parametres' : ecran}
             couleurs={couleurs}
             onChoisir={choisir}
             onFermer={() => setMenuOuvert(false)}
@@ -72,7 +77,13 @@ export default function App() {
             couleurs={couleurs}
             onFermer={() => setReglagesOuverts(null)}
           />
-          <StatusBar style="auto" />
+          <EcranPreferences
+            visible={preferencesOuvertes}
+            couleurs={couleurs}
+            onFermer={() => setPreferencesOuvertes(false)}
+          />
+          <Verrou couleurs={couleurs} />
+          <StatusBar style={nuit ? 'light' : 'dark'} />
         </MenuProvider>
       </ReglagesIAProvider>
       </MiseAJourProvider>

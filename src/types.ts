@@ -5,6 +5,8 @@ export type Tache = {
   texte: string;
   terminee: boolean;
   creeeLe: number;
+  /** Rappel programmé : date (ms) et identifiant de la notification. */
+  rappel?: { date: number; id: string };
 };
 
 export type Filtre = 'toutes' | 'actives' | 'terminees';

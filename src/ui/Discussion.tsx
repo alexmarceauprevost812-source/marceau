@@ -18,6 +18,7 @@ import { discuter, ReponseInterrompue, sansReflexion, type MessageIA } from '../
 import { FOURNISSEURS, manqueCle, type Espace } from '../ia/fournisseurs';
 import { choisirFichiers, choisirImages, prendrePhoto, type PieceJointe } from '../ia/pieces';
 import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
+import { BoutonEcouter } from '../voix/BoutonEcouter';
 import type { Couleurs } from '../theme';
 import { Markdown, type BlocCode } from './Markdown';
 
@@ -434,6 +435,7 @@ function Bulle({
         fichiersExistants={fichiersExistants}
         onOuvrirStudio={onOuvrirStudio}
       />
+      <BoutonEcouter texte={message.content} couleurs={c} />
       {action}
     </View>
   );

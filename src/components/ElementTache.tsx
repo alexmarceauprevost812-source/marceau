@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { formatRappel } from '../rappels/ChoixRappel';
 import type { Couleurs } from '../theme';
 import type { Tache } from '../types';
 
@@ -8,9 +9,10 @@ type Props = {
   couleurs: Couleurs;
   onBasculer: (id: string) => void;
   onSupprimer: (id: string) => void;
+  onRappel: (tache: Tache) => void;
 };
 
-export function ElementTache({ tache, couleurs, onBasculer, onSupprimer }: Props) {
+export function ElementTache({ tache, couleurs, onBasculer, onSupprimer, onRappel }: Props) {
   return (
     <View style={[styles.ligne, { backgroundColor: couleurs.carte, borderColor: couleurs.bordure }]}>
       <Pressable
@@ -39,6 +41,22 @@ export function ElementTache({ tache, couleurs, onBasculer, onSupprimer }: Props
           {tache.texte}
         </Text>
       </Pressable>
+      {!tache.terminee && (
+        <Pressable
+          onPress={() => onRappel(tache)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={tache.rappel ? `Rappel ${formatRappel(tache.rappel.date)}` : 'Ajouter un rappel'}
+          style={[
+            styles.rappel,
+            tache.rappel ? { backgroundColor: couleurs.accent } : { borderColor: couleurs.bordure, borderWidth: 1 },
+          ]}
+        >
+          <Text style={[styles.texteRappel, { color: tache.rappel ? couleurs.surAccent : couleurs.texteDoux }]}>
+            ⏰{tache.rappel ? ` ${formatRappel(tache.rappel.date)}` : ''}
+          </Text>
+        </Pressable>
+      )}
       <Pressable
         onPress={() => onSupprimer(tache.id)}
         hitSlop={12}
@@ -75,4 +93,6 @@ const styles = StyleSheet.create({
   texte: { flex: 1, fontSize: 16 },
   barre: { textDecorationLine: 'line-through' },
   supprimer: { fontSize: 18, paddingLeft: 12 },
+  rappel: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, marginLeft: 8, maxWidth: 140 },
+  texteRappel: { fontSize: 12, fontWeight: '700' },
 });
