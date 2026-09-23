@@ -1,0 +1,36 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'org.marceau'
+version = '0.1.0'
+
+android {
+  namespace "org.marceau.terminal"
+  if (rootProject.hasProperty("ndkVersion")) {
+    ndkVersion rootProject.ext.ndkVersion
+  }
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+    externalNativeBuild {
+      cmake {
+        cFlags "-std=c11", "-Wall", "-O2"
+      }
+    }
+  }
+  externalNativeBuild {
+    cmake {
+      path "CMakeLists.txt"
+    }
+  }
+}
+
+dependencies {
+  implementation "androidx.core:core-ktx:1.17.0"
+  // SSH (onglet « Ordinateur »)
+  implementation "com.github.mwiede:jsch:0.2.20"
+  // Clés SSH ed25519 sur Android
+  implementation "org.bouncycastle:bcprov-jdk18on:1.78.1"
+}

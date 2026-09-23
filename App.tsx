@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { EcranChat } from './src/ecrans/EcranChat';
 import { EcranCodex } from './src/ecrans/EcranCodex';
 import { EcranPreferences } from './src/ecrans/EcranPreferences';
 import { EcranReglages } from './src/ecrans/EcranReglages';
+import { EcranTerminal } from './src/ecrans/EcranTerminal';
 import { EcranTaches } from './src/ecrans/EcranTaches';
 import type { Espace } from './src/ia/fournisseurs';
 import { ReglagesIAProvider } from './src/ia/ReglagesContexte';
@@ -28,6 +29,11 @@ export default function App() {
   const [reglagesOuverts, setReglagesOuverts] = useState<Espace | null>(null);
   const ouvrirReglages = useCallback((espace: Espace = 'chat') => setReglagesOuverts(espace), []);
   const [bureauOuvert, setBureauOuvert] = useState(false);
+  // Le Terminal n'est chargé qu'à sa première ouverture.
+  const [terminalOuvert, setTerminalOuvert] = useState(false);
+  useEffect(() => {
+    if (ecran === 'terminal') setTerminalOuvert(true);
+  }, [ecran]);
   const ouvrirMenu = useCallback(() => setMenuOuvert(true), []);
   const ouvrirBureau = useCallback(() => setBureauOuvert(true), []);
 
@@ -56,6 +62,11 @@ export default function App() {
             <View style={[styles.ecran, ecran !== 'projet' && styles.cache]}>
               <EcranTaches couleurs={couleurs} />
             </View>
+            {terminalOuvert && (
+              <View style={[styles.ecran, ecran !== 'terminal' && styles.cache]}>
+                <EcranTerminal couleurs={couleurs} />
+              </View>
+            )}
           </SafeAreaView>
 
           <MenuLateral

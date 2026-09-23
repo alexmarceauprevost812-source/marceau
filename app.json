@@ -60,7 +60,8 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "useLegacyPackaging": true
           }
         }
       ],
@@ -70,7 +71,8 @@
           "photosPermission": "Marceau utilise tes photos pour les montrer à l'IA quand tu les ajoutes avec le bouton +.",
           "cameraPermission": "Marceau utilise l'appareil photo pour montrer une photo à l'IA."
         }
-      ]
+      ],
+      "./modules/marceau-terminal/app.plugin.js"
     ],
     "extra": {
       "eas": {

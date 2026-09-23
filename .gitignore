@@ -39,3 +39,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Terminal : fichiers générés
+src/terminal/xtermBundle.ts
+modules/marceau-terminal/android/src/main/jniLibs/
+modules/marceau-terminal/android/build/
+modules/marceau-terminal/android/.cxx/
