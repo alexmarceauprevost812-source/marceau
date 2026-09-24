@@ -198,7 +198,9 @@ EOF
   # PRoot
   (cd "$src" && unzip -q "$SOURCES/proot-${PROOT_VERSION}.zip") || return 1
   local proot="$src/proot-${PROOT_VERSION}/src"
-  export CPPFLAGS="-I$dep/include -DARG_MAX=131072 -DVERSION=\\\"${PROOT_VERSION}\\\""
+  # extension/ashmem_memfd/ashmem_memfd.c utilise strcmp/memset sans inclure <string.h> : le
+  # compilateur récent du NDK en fait une erreur. On force l'inclusion (sans modifier la source).
+  export CPPFLAGS="-include string.h -I$dep/include -DARG_MAX=131072 -DVERSION=\\\"${PROOT_VERSION}\\\""
   export LDFLAGS="-L$dep/lib -Wl,--no-as-needed -llog -landroid"
   local options=(
     -C "$proot" proot V=1
