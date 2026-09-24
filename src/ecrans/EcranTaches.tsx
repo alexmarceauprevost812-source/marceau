@@ -13,11 +13,14 @@ import {
   View,
 } from 'react-native';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { AssistantIA } from '../components/AssistantIA';
 import { EcranChat } from './EcranChat';
 import { ElementTache } from '../components/ElementTache';
 import { nouvelId, usePersistant } from '../hooks/usePersistant';
 import { useTaches } from '../hooks/useTaches';
+import { annulerRappel } from '../rappels/notifications';
 import { BoutonBureau, BoutonMenu } from '../navigation/Menu';
 import type { Couleurs } from '../theme';
 import type { Filtre, Tache } from '../types';
@@ -85,9 +88,18 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
       {
         text: 'Supprimer',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
+          // Annule les rappels des tâches du projet supprimé (sinon ils sonneraient sans être visibles).
+          try {
+            const brut = await AsyncStorage.getItem(cleTaches(p.id));
+            const taches: Tache[] = brut ? JSON.parse(brut) : [];
+            await Promise.all(taches.map((t) => annulerRappel(t.rappel?.id)));
+            await AsyncStorage.removeItem(cleTaches(p.id));
+          } catch {
+            // le projet est retiré quand même
+          }
           setProjets((liste) => liste.filter((x) => x.id !== p.id));
-          if (projetActif === p.id) setProjetActif('defaut');
+          if (projetActif === p.id) setProjetActif(projets.find((x) => x.id !== p.id)?.id ?? 'defaut');
           setRenommer(null);
         },
       },

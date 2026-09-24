@@ -18,10 +18,14 @@ export function useTaches(cle: string = 'marceau:taches') {
   const [chargement, setChargement] = useState(true);
   const courantes = useRef<Tache[]>([]);
   courantes.current = taches;
+  // Clé dont les tâches sont réellement chargées : on n'enregistre que pour celle-là, jamais
+  // les tâches d'un projet sous la clé d'un autre pendant le changement de projet.
+  const cleChargee = useRef<string | null>(null);
 
   // Recharge quand on change de projet (clé différente).
   useEffect(() => {
     let vivant = true;
+    cleChargee.current = null;
     setChargement(true);
     setTaches([]);
     AsyncStorage.getItem(cle)
@@ -30,7 +34,10 @@ export function useTaches(cle: string = 'marceau:taches') {
       })
       .catch(() => {})
       .finally(() => {
-        if (vivant) setChargement(false);
+        if (vivant) {
+          cleChargee.current = cle;
+          setChargement(false);
+        }
       });
     return () => {
       vivant = false;
@@ -38,7 +45,8 @@ export function useTaches(cle: string = 'marceau:taches') {
   }, [cle]);
 
   useEffect(() => {
-    if (chargement) return;
+    // Tant que ce projet n'est pas chargé, on n'écrit rien (sinon on écraserait ses vraies tâches).
+    if (chargement || cleChargee.current !== cle) return;
     sauvegarder(cle, taches);
   }, [cle, taches, chargement]);
 
