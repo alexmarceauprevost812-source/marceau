@@ -8,31 +8,39 @@ import { annulerRappel, programmerRappel } from '../rappels/notifications';
 import type { Tache } from '../types';
 import { reagir } from '../ui/Avatar';
 
-const CLE_STOCKAGE = 'marceau:taches';
-
 function nouvelId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function useTaches() {
+/** Tâches d'un projet. `cle` sépare les tâches par projet (le projet par défaut garde l'ancienne clé). */
+export function useTaches(cle: string = 'marceau:taches') {
   const [taches, setTaches] = useState<Tache[]>([]);
   const [chargement, setChargement] = useState(true);
   const courantes = useRef<Tache[]>([]);
   courantes.current = taches;
 
+  // Recharge quand on change de projet (clé différente).
   useEffect(() => {
-    AsyncStorage.getItem(CLE_STOCKAGE)
+    let vivant = true;
+    setChargement(true);
+    setTaches([]);
+    AsyncStorage.getItem(cle)
       .then((brut) => {
-        if (brut) setTaches(JSON.parse(brut));
+        if (vivant && brut) setTaches(JSON.parse(brut));
       })
       .catch(() => {})
-      .finally(() => setChargement(false));
-  }, []);
+      .finally(() => {
+        if (vivant) setChargement(false);
+      });
+    return () => {
+      vivant = false;
+    };
+  }, [cle]);
 
   useEffect(() => {
     if (chargement) return;
-    sauvegarder(CLE_STOCKAGE, taches);
-  }, [taches, chargement]);
+    sauvegarder(cle, taches);
+  }, [cle, taches, chargement]);
 
   const ajouter = useCallback((texte: string) => {
     const propre = texte.trim();
