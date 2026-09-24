@@ -202,7 +202,8 @@ function VueProjet({
   onRetour: () => void;
   onModifier: (f: (p: Projet) => Projet) => void;
 }) {
-  const [onglet, setOnglet] = useState<'discussion' | 'agent' | 'code'>('discussion');
+  // L'agent (Claude qui travaille lui-même dans le projet) est le mode principal du Codex.
+  const [onglet, setOnglet] = useState<'agent' | 'discussion' | 'code'>('agent');
   const [studio, setStudio] = useState<{ html: string; titre: string } | null>(null);
   const [envoi, setEnvoi] = useState(false);
   const [connexionGithub, setConnexionGithub] = useState(false);
@@ -330,7 +331,7 @@ function VueProjet({
       </View>
 
       <View style={[styles.segments, { borderColor: c.bordure }]}>
-        {(['discussion', 'agent', 'code'] as const).map((o) => {
+        {(['agent', 'discussion', 'code'] as const).map((o) => {
           const actif = onglet === o;
           return (
             <Pressable
@@ -341,7 +342,7 @@ function VueProjet({
               style={[styles.segment, actif && { backgroundColor: c.accent }]}
             >
               <Text style={{ color: actif ? c.surAccent : c.texte, fontWeight: '700' }}>
-                {o === 'discussion' ? '💬 Discussion' : o === 'agent' ? '🤖 Agent' : `</> Code (${p.fichiers.length})`}
+                {o === 'discussion' ? '💬 Discussion' : o === 'agent' ? '🤖 Agent Claude' : `</> Code (${p.fichiers.length})`}
               </Text>
             </Pressable>
           );
