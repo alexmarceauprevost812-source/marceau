@@ -107,7 +107,10 @@ export default function App() {
           />
           <EcranAgenda visible={agendaOuvert} couleurs={couleurs} onFermer={() => setAgendaOuvert(false)} />
           <EcranCarte visible={carteOuverte} couleurs={couleurs} onFermer={() => setCarteOuverte(false)} />
-          <Verrou couleurs={couleurs} />
+          {/* Le verrou est un Modal natif : monté seulement après l'écran d'ouverture, sinon sa
+              fenêtre native passerait par-dessus l'animation, qui jouerait sans être vue. Pendant
+              l'ouverture, l'écran est de toute façon couvert (fond noir) et les touches bloquées. */}
+          {ouvert && <Verrou couleurs={couleurs} />}
           <Reactions couleurs={couleurs} />
           {!ouvert && <Ouverture onFini={finOuverture} />}
           <StatusBar style={nuit ? 'light' : 'dark'} />
