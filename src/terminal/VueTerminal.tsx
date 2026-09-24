@@ -85,7 +85,9 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
     }
     return SAISIE + c + FIN;
   }
-  function colorerSaisie(s){ var o = ''; for (var i = 0; i < s.length; i++) o += colorerCar(s.charAt(i)); return o; }
+  // Parcours par POINT DE CODE (Array.from) : ne pas couper une paire de substitution (emoji) en
+  // insérant des codes couleur entre ses deux moitiés.
+  function colorerSaisie(s){ var arr = Array.from(s), o = ''; for (var i = 0; i < arr.length; i++) o += colorerCar(arr[i]); return o; }
   // Colorie une ligne complète (mode ligne) : 1er mot en or, reste en vert lime.
   function rendreLigne(s){
     var sp = -1;
