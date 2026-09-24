@@ -167,10 +167,13 @@ EOF
   ) || { avertir "$abi : échec de talloc (voir $src/talloc-${TALLOC_VERSION}/*.log)"; return 1; }
 
   # libandroid-shmem (bibliothèque statique)
+  # shmem.c utilise _PATH_TMP (de <paths.h>) pour le chemin d'un lien symbolique, mais le NDK
+  # récent (bionic) ne définit plus cette macro : on la fournit à la compilation (sans modifier
+  # la source) en pointant vers un dossier privé inscriptible par l'application.
   tar -xzf "$SOURCES/libandroid-shmem-${SHMEM_VERSION}.tar.gz" -C "$src"
   (
     cd "$src/libandroid-shmem-${SHMEM_VERSION}" || exit 1
-    "$CC" -fPIC -std=gnu11 -O2 -c shmem.c -o shmem.o &&
+    "$CC" -fPIC -std=gnu11 -O2 -D_PATH_TMP='"/data/data/org.marceau.app/cache/"' -c shmem.c -o shmem.o &&
       "$AR" rcs "$dep/lib/libandroid-shmem.a" shmem.o &&
       cp shm.h "$dep/include/sys/shm.h"
   ) || { avertir "$abi : échec de libandroid-shmem"; return 1; }
