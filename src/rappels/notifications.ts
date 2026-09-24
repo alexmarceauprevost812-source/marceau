@@ -51,13 +51,17 @@ export async function annulerRappel(id: string | undefined) {
 }
 
 const CANAL_REVEIL = 'reveil';
-let pretReveil: Promise<boolean> | null = null;
+let canalReveilPret = false;
 
-/** Prépare le canal « Réveil » (sonnerie forte) et demande la permission des notifications. */
-function preparerReveil(): Promise<boolean> {
-  if (Platform.OS === 'web') return Promise.resolve(false);
-  pretReveil ??= (async () => {
-    if (Platform.OS === 'android') {
+/**
+ * Prépare le canal « Réveil » (une seule fois) et vérifie la permission des notifications
+ * À CHAQUE appel : si l'utilisateur l'a retirée dans les réglages du téléphone puis revient,
+ * on ne doit pas croire, à partir d'un cache, que le réveil pourra sonner.
+ */
+async function preparerReveil(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  try {
+    if (Platform.OS === 'android' && !canalReveilPret) {
       await Notifications.setNotificationChannelAsync(CANAL_REVEIL, {
         name: 'Réveil',
         importance: Notifications.AndroidImportance.MAX,
@@ -65,16 +69,15 @@ function preparerReveil(): Promise<boolean> {
         vibrationPattern: [0, 500, 500, 500, 500, 500],
         enableVibrate: true,
       });
+      canalReveilPret = true;
     }
     const actuel = await Notifications.getPermissionsAsync();
     if (actuel.granted) return true;
     const demande = await Notifications.requestPermissionsAsync();
     return demande.granted;
-  })().catch(() => false);
-  return pretReveil.then((ok) => {
-    if (!ok) pretReveil = null;
-    return ok;
-  });
+  } catch {
+    return false;
+  }
 }
 
 /**
