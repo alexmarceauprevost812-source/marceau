@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { listerModeles } from '../ia/client';
 import { utilisateurGithub } from '../ia/github';
+import { connexionDirectePossible } from '../ia/connexionGithub';
+import { ConnexionGithub } from './ConnexionGithub';
 import { FOURNISSEURS, ORDRE_FOURNISSEURS, type Espace, type IdFournisseur, type ReglagesIA } from '../ia/fournisseurs';
 import { useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
@@ -31,6 +33,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
   const [message, setMessage] = useState('');
   const [espace, setEspace] = useState<Espace>(espaceInitial);
   const [testGithub, setTestGithub] = useState<{ ok: boolean; texte: string } | null>(null);
+  const [connexionGithub, setConnexionGithub] = useState(false);
   const [testEnCours, setTestEnCours] = useState(false);
 
   useEffect(() => {
@@ -239,7 +242,32 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
 
             {espace === 'codex' && (
               <>
-                <Text style={[styles.etiquette, { color: c.texteDoux }]}>JETON GITHUB (LIRE ET ÉCRIRE TES PROJETS)</Text>
+                <Text style={[styles.etiquette, { color: c.texteDoux }]}>GITHUB (LIRE ET ÉCRIRE TES PROJETS)</Text>
+                {connexionDirectePossible() && (
+                  <>
+                    <Pressable
+                      onPress={() => setConnexionGithub(true)}
+                      accessibilityRole="button"
+                      style={[styles.bouton, { backgroundColor: c.carte, borderWidth: 1, borderColor: c.accent }]}
+                    >
+                      <Text style={{ color: c.accentTexte, fontWeight: '800' }}>🐙 Se connecter avec GitHub</Text>
+                    </Pressable>
+                    <ConnexionGithub
+                      visible={connexionGithub}
+                      couleurs={c}
+                      onFermer={() => setConnexionGithub(false)}
+                      onConnecte={async (jeton, login) => {
+                        // On n'enregistre que le jeton (sur les réglages déjà validés) : les autres
+                        // modifications du brouillon restent annulables avec « Annuler ».
+                        setBrouillon((b) => ({ ...b, jetonGithub: jeton }));
+                        await enregistrer({ ...reglages, jetonGithub: jeton });
+                        setTestGithub({ ok: true, texte: `Connecté à GitHub : ${login} ✓` });
+                        setConnexionGithub(false);
+                      }}
+                    />
+                    <Text style={[styles.aide, { color: c.texteDoux }]}>Ou colle un jeton GitHub :</Text>
+                  </>
+                )}
                 <TextInput
                   value={brouillon.jetonGithub}
                   onChangeText={(v) => {

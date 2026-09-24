@@ -56,6 +56,29 @@ async function ecrire(cle: string, valeur: string) {
   tmp.moveSync(fichier(cle), { overwrite: true });
 }
 
+/** Lit une valeur enregistrée (hors composant), ou null si absente. */
+export async function lirePersistant<T>(cle: string): Promise<T | null> {
+  try {
+    const brut = await lire(cle);
+    return brut ? (JSON.parse(brut) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Efface une valeur enregistrée (fichier + ancien AsyncStorage). */
+export async function effacerPersistant(cle: string): Promise<void> {
+  try {
+    if (Platform.OS !== 'web') {
+      const f = fichier(cle);
+      if (f.exists) f.delete();
+    }
+  } catch {
+    // rien de plus à faire
+  }
+  await AsyncStorage.removeItem(cle).catch(() => {});
+}
+
 /** État sauvegardé sur le téléphone, rechargé au démarrage. */
 export function usePersistant<T>(cle: string, defaut: T) {
   const [valeur, setValeur] = useState<T>(defaut);

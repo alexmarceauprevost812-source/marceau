@@ -17,8 +17,10 @@ import * as SecureStore from 'expo-secure-store';
 
 import { Terminal, type InfosTerminal, type OptionsSsh } from '../../modules/marceau-terminal';
 import type { Couleurs } from '../theme';
+import { usePersistant } from '../hooks/usePersistant';
 import { AideLinux } from './AideLinux';
 import { BarreTouches } from './BarreTouches';
+import { MesOutils } from './MesOutils';
 import { VueTerminal, type PoigneeTerminal, type Theme } from './VueTerminal';
 
 /**
@@ -82,6 +84,7 @@ function Console({
   onTaille?: (c: number, l: number) => void;
 }) {
   const [ctrl, setCtrl] = useState(false);
+  const [barre, setBarre] = usePersistant('marceau:barre-touches', true);
   return (
     <View style={styles.flex}>
       <VueTerminal
@@ -95,7 +98,17 @@ function Console({
         onInterrompre={onInterrompre}
         onCtrlUtilise={() => setCtrl(false)}
       />
-      <BarreTouches terminal={terminal} couleurs={couleurs} ctrlActif={ctrl} setCtrlActif={setCtrl} />
+      {barre && <BarreTouches terminal={terminal} couleurs={couleurs} ctrlActif={ctrl} setCtrlActif={setCtrl} />}
+      <Pressable
+        onPress={() => setBarre((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={barre ? 'Cacher la barre de touches' : 'Afficher la barre de touches'}
+        style={[styles.bascule, { borderColor: couleurs.bordure, backgroundColor: couleurs.carte }]}
+      >
+        <Text style={{ color: couleurs.texteDoux, fontSize: 12, fontWeight: '700' }}>
+          {barre ? '⌨ Cacher les touches' : '⌨ Afficher les touches'}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -218,20 +231,32 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
 /** Terminal Linux prêt, avec la barre d'aide (commandes et catalogue). */
 function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
   const [aide, setAide] = useState(false);
+  const [outils, setOutils] = useState(false);
   return (
     <View style={styles.flex}>
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
+        <Bouton couleurs={c} libelle="🧰 Mes outils" compact secondaire onPress={() => setOutils(true)} />
         <Bouton couleurs={c} libelle="📖 Commandes" compact secondaire onPress={() => setAide(true)} />
-        <Bouton couleurs={c} libelle="🧰 Outils Kali" compact secondaire onPress={() => Linking.openURL(LIEN_KALI)} />
+        <Bouton couleurs={c} libelle="📦 Catalogue Alpine" compact secondaire onPress={() => Linking.openURL(LIEN_CATALOGUE)} />
       </View>
       <SessionPty couleurs={c} type="linux" />
       <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
+      <MesOutils
+        visible={outils}
+        couleurs={c}
+        onFermer={() => setOutils(false)}
+        onLancer={(o) => {
+          setOutils(false);
+          // Même session que SessionPty (id « linux ») : on tape le nom de l'outil puis Entrée.
+          Terminal?.ecrire('linux', `${o}\r`).catch(() => {});
+        }}
+      />
     </View>
   );
 }
 
-/** Catalogue officiel des outils de Kali Linux (à lire dans le navigateur, pas exécuté par l'appli). */
-export const LIEN_KALI = 'https://www.kali.org/tools/';
+/** Catalogue officiel des paquets Alpine : c'est CE que « apk add » installe (à lire dans le navigateur). */
+export const LIEN_CATALOGUE = 'https://pkgs.alpinelinux.org/packages';
 
 // ---------------------------------------------------------------------------
 // Option 2 : Termux
@@ -623,8 +648,10 @@ const styles = StyleSheet.create({
   code: { fontFamily: 'monospace', fontSize: 13 },
   ligne: { flexDirection: 'row', gap: 10 },
   ligneInter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bascule: { alignItems: 'center', paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth },
   barreAction: {
     flexDirection: 'row',
+    flexWrap: 'wrap', // petits écrans / grande police : les boutons passent à la ligne
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 12,

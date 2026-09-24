@@ -6,7 +6,7 @@ import { IconeBureau } from '../bureau/Bureau';
 import { IMAGES } from '../images';
 import type { Couleurs } from '../theme';
 
-export type Section = 'chat' | 'codex' | 'projet' | 'terminal' | 'agenda' | 'carte' | 'notes' | 'reveil' | 'parametres' | 'preferences';
+export type Section = 'chat' | 'codex' | 'projet' | 'terminal' | 'commandes' | 'agenda' | 'carte' | 'notes' | 'reveil' | 'parametres' | 'preferences';
 
 export const SECTIONS: { cle: Section; icone: string; libelle: string }[] = [
   { cle: 'chat', icone: '💬', libelle: 'Chat' },
@@ -19,7 +19,7 @@ export const SECTIONS: { cle: Section; icone: string; libelle: string }[] = [
 
 /** Liens utiles ouverts dans le navigateur (documentation, catalogues…). */
 export const LIENS: { url: string; icone: string; libelle: string }[] = [
-  { url: 'https://www.kali.org/tools/', icone: '🧰', libelle: 'Outils Kali (doc)' },
+  { url: 'https://pkgs.alpinelinux.org/packages', icone: '📦', libelle: 'Catalogue Alpine (outils installables)' },
 ];
 
 const MenuCtx = createContext<{ ouvrirMenu: () => void; ouvrirBureau: () => void } | null>(null);

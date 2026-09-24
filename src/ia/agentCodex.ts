@@ -33,6 +33,11 @@ export type ResultatAgent = {
   avertissement?: string;
 };
 
+/** Ce que Claude est en train d'écrire, en direct (texte de réponse ou code d'un fichier). */
+export type DirectAgent =
+  | { type: 'texte'; texte: string }
+  | { type: 'ecrire' | 'modifier'; chemin: string; code: string };
+
 type OptionsAgent = {
   systeme: string;
   /** Conversation précédente avec l'agent (texte) + la nouvelle demande en dernier. */
@@ -40,6 +45,8 @@ type OptionsAgent = {
   fichiers: FichiersAgent;
   signal?: AbortSignal;
   onEtape?: (e: EtapeAgent) => void;
+  /** Appelé à chaque morceau reçu pendant que Claude écrit ; null quand le bloc en cours est fini. */
+  onDirect?: (d: DirectAgent | null) => void;
   /** Nombre maximum d'allers-retours avec Claude pour une demande. */
   maxEtapes?: number;
 };
@@ -73,6 +80,8 @@ const OUTILS = [
       required: ['chemin', 'contenu'],
       additionalProperties: false,
     },
+    // Le code arrive au fur et à mesure qu'il est écrit (sinon tout d'un coup à la fin du fichier).
+    eager_input_streaming: true,
   },
   {
     name: 'modifier_fichier',
@@ -88,6 +97,7 @@ const OUTILS = [
       required: ['chemin', 'ancien', 'nouveau'],
       additionalProperties: false,
     },
+    eager_input_streaming: true,
   },
   {
     name: 'supprimer_fichier',
@@ -153,20 +163,179 @@ function executerOutil(nom: string, entree: Record<string, unknown>, f: Fichiers
   }
 }
 
-async function appeler(c: Connexion, corps: Record<string, unknown>, signal?: AbortSignal): Promise<ReponseMessages> {
+/** Lit une chaîne JSON à partir de s[i] (juste après le guillemet ouvrant), même si elle n'est pas finie. */
+function lireChaine(s: string, i: number): { texte: string; fin: number; complete: boolean } {
+  let texte = '';
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch === '"') return { texte, fin: i + 1, complete: true };
+    if (ch !== '\\') {
+      texte += ch;
+      i++;
+      continue;
+    }
+    const e = s[i + 1];
+    if (e === undefined) break; // échappement coupé : on attend la suite
+    if (e === 'u') {
+      const hex = s.slice(i + 2, i + 6);
+      if (hex.length < 4) break;
+      texte += String.fromCharCode(parseInt(hex, 16) || 0);
+      i += 6;
+      continue;
+    }
+    texte += ({ n: '\n', t: '\t', r: '\r', b: '\b', f: '\f' } as Record<string, string>)[e] ?? e;
+    i += 2;
+  }
+  return { texte, fin: i, complete: false };
+}
+
+/** Champs texte d'un objet JSON encore en cours d'écriture ({"chemin":"a.js","contenu":"deb…). */
+export function champsPartiels(json: string): Record<string, string> {
+  const champs: Record<string, string> = {};
+  const blanc = /\s/;
+  let i = json.indexOf('{');
+  if (i < 0) return champs;
+  i++;
+  for (;;) {
+    while (i < json.length && (blanc.test(json[i]) || json[i] === ',')) i++;
+    if (json[i] !== '"') return champs;
+    const cle = lireChaine(json, i + 1);
+    if (!cle.complete) return champs;
+    i = cle.fin;
+    while (i < json.length && blanc.test(json[i])) i++;
+    if (json[i] !== ':') return champs;
+    i++;
+    while (i < json.length && blanc.test(json[i])) i++;
+    if (json[i] !== '"') return champs; // seules les valeurs texte nous intéressent
+    const valeur = lireChaine(json, i + 1);
+    champs[cle.texte] = valeur.texte;
+    if (!valeur.complete) return champs;
+    i = valeur.fin;
+  }
+}
+
+/** Réponse de Claude + les appels d'outils dont l'entrée JSON reçue est invalide (id → texte brut). */
+type ReponseDirecte = ReponseMessages & { invalides: Map<string, string> };
+
+/** Appelle Claude en direct (flux SSE) et reconstruit la réponse complète, bloc par bloc. */
+async function appeler(
+  c: Connexion,
+  corps: Record<string, unknown>,
+  signal?: AbortSignal,
+  onDirect?: (d: DirectAgent | null) => void,
+): Promise<ReponseDirecte> {
   let reponse: Awaited<ReturnType<typeof fetchExpo>>;
   try {
     reponse = await fetchExpo(`${base(c)}/messages`, {
       method: 'POST',
       headers: entetes(c),
-      body: JSON.stringify(corps),
+      body: JSON.stringify({ ...corps, stream: true }),
       signal,
     });
   } catch (e) {
     throw erreurReseau(e, c);
   }
   if (!reponse.ok) throw await erreurLisible(reponse, c);
-  return (await reponse.json()) as ReponseMessages;
+  if (!reponse.body) throw new Error('Le serveur n’a pas renvoyé de réponse en direct.');
+
+  const blocs: BlocContenu[] = [];
+  const jsons = new Map<number, string>();
+  const invalides = new Map<string, string>();
+  const dernierParse = new Map<number, number>();
+  let stop: string | null = null;
+  let fini = false;
+
+  const direct = (index: number, forcer = false) => {
+    const b = blocs[index];
+    if (!onDirect || !b) return;
+    if (b.type === 'text') onDirect({ type: 'texte', texte: chaine(b.text) });
+    else if (b.type === 'tool_use' && (b.name === 'ecrire_fichier' || b.name === 'modifier_fichier')) {
+      // champsPartiels relit tout le JSON accumulé : sur un gros fichier, le refaire à chaque
+      // petit morceau serait quadratique. On ne relit donc au plus qu'une fois toutes les 50 ms
+      // (et une dernière fois à la fin du bloc, via forcer=true).
+      const maintenant = Date.now();
+      if (!forcer && maintenant - (dernierParse.get(index) ?? 0) < 50) return;
+      dernierParse.set(index, maintenant);
+      const champs = champsPartiels(jsons.get(index) ?? '');
+      const code = b.name === 'ecrire_fichier' ? champs.contenu : champs.nouveau;
+      if (code !== undefined) {
+        onDirect({ type: b.name === 'ecrire_fichier' ? 'ecrire' : 'modifier', chemin: nettoyerChemin(champs.chemin ?? ''), code });
+      }
+    }
+  };
+
+  const traiter = (ligne: string) => {
+    const l = ligne.trim();
+    if (!l.startsWith('data:')) return;
+    let ev: Record<string, any>;
+    try {
+      ev = JSON.parse(l.slice(5).trim());
+    } catch {
+      return;
+    }
+    switch (ev.type) {
+      case 'error':
+        throw new Error(ev.error?.message ?? 'Erreur du serveur Anthropic.');
+      case 'content_block_start':
+        blocs[ev.index] = { ...ev.content_block };
+        if (ev.content_block?.type === 'tool_use') jsons.set(ev.index, '');
+        break;
+      case 'content_block_delta': {
+        const b = blocs[ev.index];
+        const d = ev.delta ?? {};
+        if (!b) break;
+        if (d.type === 'text_delta') b.text = chaine(b.text) + chaine(d.text);
+        else if (d.type === 'thinking_delta') b.thinking = chaine(b.thinking) + chaine(d.thinking);
+        else if (d.type === 'signature_delta') b.signature = chaine(d.signature);
+        else if (d.type === 'input_json_delta') jsons.set(ev.index, (jsons.get(ev.index) ?? '') + chaine(d.partial_json));
+        direct(ev.index);
+        break;
+      }
+      case 'content_block_stop': {
+        const b = blocs[ev.index];
+        direct(ev.index, true); // dernière relecture : montrer le code complet du bloc
+        if (b?.type === 'tool_use') {
+          const brut = jsons.get(ev.index) ?? '';
+          try {
+            b.input = brut.trim() ? JSON.parse(brut) : {};
+          } catch {
+            b.input = {};
+            invalides.set(chaine(b.id), brut);
+          }
+        }
+        onDirect?.(null);
+        break;
+      }
+      case 'message_delta':
+        if (ev.delta?.stop_reason) stop = ev.delta.stop_reason;
+        break;
+      case 'message_stop':
+        fini = true;
+        break;
+    }
+  };
+
+  const lecteur = reponse.body.getReader();
+  const decodeur = new TextDecoder();
+  let tampon = '';
+  try {
+    for (;;) {
+      const { done, value } = await lecteur.read();
+      if (done) break;
+      tampon += decodeur.decode(value, { stream: true });
+      const lignes = tampon.split('\n');
+      tampon = lignes.pop() ?? '';
+      lignes.forEach(traiter);
+    }
+    traiter(tampon);
+  } catch (e) {
+    if ((e as Error)?.name === 'AbortError' || signal?.aborted) throw e;
+    throw e instanceof Error && e.message ? e : erreurReseau(e, c);
+  } finally {
+    onDirect?.(null);
+  }
+  if (!fini) throw new Error('La connexion a été coupée pendant que Claude écrivait. Réessaie.');
+  return { content: blocs.filter(Boolean), stop_reason: stop, invalides };
 }
 
 /** Fait travailler Claude dans le projet jusqu'à ce que la demande soit faite. */
@@ -195,6 +364,7 @@ export async function lancerAgent(c: Connexion, o: OptionsAgent): Promise<Result
         cache_control: { type: 'ephemeral' },
       },
       o.signal,
+      o.onDirect,
     );
     // On renvoie la réponse telle quelle (y compris les blocs de réflexion) à l'étape suivante.
     messages.push({ role: 'assistant', content: r.content });
@@ -227,6 +397,11 @@ export async function lancerAgent(c: Connexion, o: OptionsAgent): Promise<Result
           is_error: true,
           content: 'Ta réponse a été coupée avant la fin : cet appel est incomplet. Écris des fichiers plus petits ou utilise modifier_fichier.',
         };
+      }
+      const brut = r.invalides.get(id);
+      if (brut !== undefined) {
+        o.onEtape?.({ type: 'erreur', detail: 'Entrée d’outil illisible, Claude va réessayer.' });
+        return { type: 'tool_result', tool_use_id: id, is_error: true, content: JSON.stringify({ INVALID_JSON: brut }) };
       }
       try {
         const entree = (b.input && typeof b.input === 'object' ? b.input : {}) as Record<string, unknown>;

@@ -33,6 +33,25 @@ internal object Linux {
 
   fun installe(ctx: Context) = File(racine(ctx), MARQUEUR).exists()
 
+  /** Paquets de base d'Alpine : ce ne sont pas des outils ajoutés par la personne. */
+  private val BASE = setOf("alpine-base", "alpine-baselayout", "alpine-baselayout-data", "alpine-keys",
+    "alpine-release", "apk-tools", "busybox", "busybox-binsh", "libc-utils", "musl", "musl-utils", "scanelf",
+    "ssl_client", "ca-certificates-bundle", "zlib", "libcrypto3", "libssl3")
+
+  /**
+   * Outils installés avec « apk add » : la liste /etc/apk/world d'Alpine (paquets demandés,
+   * sans leurs dépendances), sans les paquets de base ni les contraintes de version.
+   */
+  fun outilsInstalles(ctx: Context): List<String> {
+    val world = File(racine(ctx), "etc/apk/world")
+    if (!installe(ctx) || !world.canRead()) return emptyList()
+    return world.readLines()
+      .map { it.trim().split(Regex("[<>=~@]"))[0] }
+      .filter { it.isNotEmpty() && it !in BASE }
+      .distinct()
+      .sorted()
+  }
+
   /** Architecture Alpine correspondant au téléphone. */
   private fun archAlpine(): String =
     when (Build.SUPPORTED_ABIS.firstOrNull()) {

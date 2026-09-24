@@ -1,12 +1,14 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { lancerAgent, type EtapeAgent, type FichiersAgent, type ResultatAgent } from '../ia/agentCodex';
+import { lancerAgent, type DirectAgent, type EtapeAgent, type FichiersAgent, type ResultatAgent } from '../ia/agentCodex';
 import type { MessageIA } from '../ia/client';
 import { FOURNISSEURS, manqueCle } from '../ia/fournisseurs';
 import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 import type { Fichier, Projet } from '../types';
+import { CarteChangement, totalChangements, type Changement } from '../ui/CarteChangement';
+import { EcritureDirecte } from '../ui/EcritureDirecte';
 import { Markdown } from '../ui/Markdown';
 
 /** Consigne de l'agent : l'arborescence seulement, Claude lit lui-même les fichiers utiles. */
@@ -73,6 +75,16 @@ function appliquer(proj: Projet, r: ResultatAgent): Projet {
   return { ...proj, fichiers, supprimes };
 }
 
+/** Fichiers touchés par l'agent, avec leur contenu avant / après (pour les compter et les afficher). */
+function listerChangements(avant: Fichier[], r: ResultatAgent): Changement[] {
+  const anciens = new Map(avant.map((f) => [f.chemin, f.contenu]));
+  return [
+    ...r.crees.map((chemin) => ({ chemin, ancien: null, nouveau: r.fichiers[chemin] ?? '' })),
+    ...r.modifies.map((chemin) => ({ chemin, ancien: anciens.get(chemin) ?? '', nouveau: r.fichiers[chemin] ?? '' })),
+    ...r.supprimes.map((chemin) => ({ chemin, ancien: anciens.get(chemin) ?? '', nouveau: null })),
+  ];
+}
+
 function resumeChangements(r: ResultatAgent): string {
   const lignes = [
     ...r.crees.map((c) => `- ➕ \`${c}\``),
@@ -97,10 +109,21 @@ export function AgentCodex({
   const [etapes, setEtapes] = useState<EtapeAgent[] | null>(null);
   // Version du projet avant le dernier passage de l'agent, pour pouvoir tout annuler.
   const [avant, setAvant] = useState<Pick<Projet, 'fichiers' | 'supprimes'> | null>(null);
+  // Fichiers changés au dernier passage de l'agent (code en couleur, lignes ajoutées / retirées).
+  const [changements, setChangements] = useState<Changement[] | null>(null);
+  // Ce que Claude écrit en ce moment (affiché en direct, rafraîchi au plus toutes les 50 ms).
+  const [direct, setDirect] = useState<DirectAgent | null>(null);
+  const dernierDirect = useRef<DirectAgent | null>(null);
+  const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controleur = useRef<AbortController | null>(null);
   const defilement = useRef<ScrollView>(null);
+  useEffect(() => () => {
+    if (minuteur.current) clearTimeout(minuteur.current);
+  }, []);
   const messages = p.messagesAgent ?? [];
   const occupe = etapes !== null;
+  // Calculé une seule fois par passage de l'agent (pas à chaque lettre tapée dans la saisie).
+  const total = useMemo(() => (changements ? totalChangements(changements) : null), [changements]);
 
   if (connexion.fournisseur !== 'anthropic' || manqueCle(connexion)) {
     const autreIA = connexion.fournisseur !== 'anthropic';
@@ -125,6 +148,22 @@ export function AgentCodex({
     );
   }
 
+  const recevoirDirect = (d: DirectAgent | null) => {
+    dernierDirect.current = d;
+    if (d === null) {
+      if (minuteur.current) clearTimeout(minuteur.current);
+      minuteur.current = null;
+      setDirect(null);
+      return;
+    }
+    if (minuteur.current) return;
+    minuteur.current = setTimeout(() => {
+      minuteur.current = null;
+      setDirect(dernierDirect.current);
+      requestAnimationFrame(() => defilement.current?.scrollToEnd({ animated: false }));
+    }, 50);
+  };
+
   const envoyer = async () => {
     const demande = saisie.trim();
     if (!demande || occupe) return;
@@ -132,6 +171,7 @@ export function AgentCodex({
     const historique: MessageIA[] = [...messages, { role: 'user', content: demande }];
     onModifier((proj) => ({ ...proj, messagesAgent: historique }));
     setEtapes([]);
+    setChangements(null);
     const ctrl = new AbortController();
     controleur.current = ctrl;
     const fichiers: FichiersAgent = Object.fromEntries(p.fichiers.map((f) => [f.chemin, f.contenu]));
@@ -146,6 +186,7 @@ export function AgentCodex({
           setEtapes((l) => [...(l ?? []), e]);
           requestAnimationFrame(() => defilement.current?.scrollToEnd({ animated: true }));
         },
+        onDirect: recevoirDirect,
       });
       const changement = r.crees.length + r.modifies.length + r.supprimes.length > 0;
       const reponse = [r.texte, resumeChangements(r), r.avertissement ? `⚠️ ${r.avertissement}` : '']
@@ -155,13 +196,17 @@ export function AgentCodex({
         const suivant = changement ? appliquer(proj, r) : proj;
         return { ...suivant, messagesAgent: [...historique, { role: 'assistant', content: reponse }] };
       });
-      if (changement) setAvant(depart);
+      if (changement) {
+        setAvant(depart);
+        setChangements(listerChangements(depart.fichiers, r));
+      }
     } catch (e) {
       const arret = (e as Error)?.name === 'AbortError';
       const texte = arret ? '⏹ Arrêté. Aucun fichier n’a été changé.' : `⚠️ ${(e as Error).message}\n\nAucun fichier n’a été changé.`;
       onModifier((proj) => ({ ...proj, messagesAgent: [...historique, { role: 'assistant', content: texte }] }));
     } finally {
       controleur.current = null;
+      recevoirDirect(null);
       setEtapes(null);
       requestAnimationFrame(() => defilement.current?.scrollToEnd({ animated: true }));
     }
@@ -182,6 +227,7 @@ export function AgentCodex({
             messagesAgent: [...(proj.messagesAgent ?? []), { role: 'assistant', content: '↩ Changements annulés.' }],
           }));
           setAvant(null);
+          setChangements(null);
         },
       },
     ]);
@@ -222,10 +268,24 @@ export function AgentCodex({
                 {ICONES[e.type]} {LIBELLES[e.type]} {e.detail}
               </Text>
             ))}
+            {direct && <EcritureDirecte direct={direct} couleurs={c} />}
             <View style={styles.enCours}>
               <ActivityIndicator color={c.accentTexte} />
-              <Text style={{ color: c.texteDoux }}>Claude travaille…</Text>
+              <Text style={{ color: c.texteDoux }}>{direct && direct.type !== 'texte' ? 'Claude écrit le code…' : 'Claude travaille…'}</Text>
             </View>
+          </View>
+        )}
+        {changements && total && changements.length > 0 && !occupe && (
+          <View style={styles.changements}>
+            <Text style={[styles.titreChangements, { color: c.texte }]}>
+              📝 Code écrit :{' '}
+              <Text style={{ color: c.code.ajout }}>+{total.ajouts}</Text>{' '}
+              <Text style={{ color: c.code.retrait }}>−{total.retraits}</Text>
+              <Text style={{ color: c.texteDoux, fontWeight: '400' }}> lignes · touche un fichier pour voir le code</Text>
+            </Text>
+            {changements.map((ch) => (
+              <CarteChangement key={ch.chemin} changement={ch} couleurs={c} />
+            ))}
           </View>
         )}
         {avant && !occupe && (
@@ -279,6 +339,8 @@ const styles = StyleSheet.create({
   bouton: { paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
   bulleMoi: { alignSelf: 'flex-end', maxWidth: '85%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   bulleAgent: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6 },
+  changements: { gap: 8 },
+  titreChangements: { fontSize: 15, fontWeight: '800' },
   enCours: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   boutonAnnuler: { alignSelf: 'center', borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
   saisie: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, borderTopWidth: StyleSheet.hairlineWidth },

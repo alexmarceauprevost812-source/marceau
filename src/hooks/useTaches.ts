@@ -8,31 +8,47 @@ import { annulerRappel, programmerRappel } from '../rappels/notifications';
 import type { Tache } from '../types';
 import { reagir } from '../ui/Avatar';
 
-const CLE_STOCKAGE = 'marceau:taches';
-
 function nouvelId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function useTaches() {
+/** Tâches d'un projet. `cle` sépare les tâches par projet (le projet par défaut garde l'ancienne clé). */
+export function useTaches(cle: string = 'marceau:taches') {
   const [taches, setTaches] = useState<Tache[]>([]);
   const [chargement, setChargement] = useState(true);
   const courantes = useRef<Tache[]>([]);
   courantes.current = taches;
+  // Clé dont les tâches sont réellement chargées : on n'enregistre que pour celle-là, jamais
+  // les tâches d'un projet sous la clé d'un autre pendant le changement de projet.
+  const cleChargee = useRef<string | null>(null);
 
+  // Recharge quand on change de projet (clé différente).
   useEffect(() => {
-    AsyncStorage.getItem(CLE_STOCKAGE)
+    let vivant = true;
+    cleChargee.current = null;
+    setChargement(true);
+    setTaches([]);
+    AsyncStorage.getItem(cle)
       .then((brut) => {
-        if (brut) setTaches(JSON.parse(brut));
+        if (vivant && brut) setTaches(JSON.parse(brut));
       })
       .catch(() => {})
-      .finally(() => setChargement(false));
-  }, []);
+      .finally(() => {
+        if (vivant) {
+          cleChargee.current = cle;
+          setChargement(false);
+        }
+      });
+    return () => {
+      vivant = false;
+    };
+  }, [cle]);
 
   useEffect(() => {
-    if (chargement) return;
-    sauvegarder(CLE_STOCKAGE, taches);
-  }, [taches, chargement]);
+    // Tant que ce projet n'est pas chargé, on n'écrit rien (sinon on écraserait ses vraies tâches).
+    if (chargement || cleChargee.current !== cle) return;
+    sauvegarder(cle, taches);
+  }, [cle, taches, chargement]);
 
   const ajouter = useCallback((texte: string) => {
     const propre = texte.trim();

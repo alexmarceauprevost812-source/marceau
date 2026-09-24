@@ -46,8 +46,28 @@ export const MODES: Record<Mode, { nom: string; icone: string; description: stri
   },
 };
 
-export function EcranChat({ couleurs: c }: { couleurs: Couleurs }) {
-  const [conversations, setConversations] = usePersistant<Conversation[]>('marceau:conversations', []);
+type PropsChat = {
+  couleurs: Couleurs;
+  /** Où sont enregistrées les conversations (permet un jeu de conversations séparé, ex. par projet). */
+  cleStockage?: string;
+  /** Titre et sous-titre de la liste. */
+  titreListe?: string;
+  sousTitreListe?: string;
+  /** Consigne ajoutée à l'IA (ex. le contexte du projet). */
+  systemeSup?: string;
+  /** Intégré dans un autre écran (le Projet) : pas de menu ni de puce IA en tête de liste. */
+  embarque?: boolean;
+};
+
+export function EcranChat({
+  couleurs: c,
+  cleStockage = 'marceau:conversations',
+  titreListe = 'Chat',
+  sousTitreListe = 'Jase et travaille avec des IA',
+  systemeSup,
+  embarque = false,
+}: PropsChat) {
+  const [conversations, setConversations] = usePersistant<Conversation[]>(cleStockage, []);
   const [ouverte, setOuverte] = useState<string | null>(null);
   const [studio, setStudio] = useState<{ html: string; titre: string } | null>(null);
 
@@ -96,7 +116,7 @@ export function EcranChat({ couleurs: c }: { couleurs: Couleurs }) {
           espace="chat"
           onOuvrirStudio={(b) => setStudio({ html: b.code, titre: b.chemin || 'Page créée par l’IA' })}
           messages={courante.messages}
-          systeme={mode.systeme}
+          systeme={systemeSup ? `${mode.systeme}\n\n${systemeSup}` : mode.systeme}
           suggestions={mode.suggestions}
           accueil={
             <Text style={[styles.accueil, { color: c.texte }]}>
@@ -125,7 +145,14 @@ export function EcranChat({ couleurs: c }: { couleurs: Couleurs }) {
 
   return (
     <View style={styles.flex}>
-      <Entete couleurs={c} titre="Chat" sousTitre="Jase et travaille avec des IA" droite={<PuceIA couleurs={c} />} />
+      {embarque ? (
+        <View style={styles.enteteEmbarquee}>
+          <Text style={[styles.titreEmbarque, { color: c.texte }]}>{titreListe}</Text>
+          <PuceIA couleurs={c} />
+        </View>
+      ) : (
+        <Entete couleurs={c} titre={titreListe} sousTitre={sousTitreListe} droite={<PuceIA couleurs={c} />} />
+      )}
       <View style={styles.modes}>
         {(Object.keys(MODES) as Mode[]).map((m) => (
           <Pressable
@@ -176,6 +203,8 @@ export function EcranChat({ couleurs: c }: { couleurs: Couleurs }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  enteteEmbarquee: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 4, paddingBottom: 10, gap: 10 },
+  titreEmbarque: { fontSize: 18, fontWeight: '800' },
   accueil: { fontSize: 20, fontWeight: '700', marginBottom: 6 },
   modes: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingBottom: 14 },
   mode: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center', gap: 4 },
