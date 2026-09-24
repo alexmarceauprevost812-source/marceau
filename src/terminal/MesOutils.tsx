@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Terminal } from '../../modules/marceau-terminal';
@@ -17,6 +17,9 @@ type Props = {
 
 /** Une commande de ta bibliothèque : un nom à toucher et la ligne de commande qu'il lance. */
 type Commande = { id: string; nom: string; commande: string };
+
+/** Catalogue officiel de tous les paquets Alpine (ce que « apk add » peut installer). */
+const LIEN_CATALOGUE = 'https://pkgs.alpinelinux.org/packages';
 
 /** Un pack d'outils à installer d'un toucher (thème → paquets Alpine). */
 type Pack = { nom: string; icone: string; paquets: string[] };
@@ -105,6 +108,23 @@ export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
             Alpine a plus de 28 000 outils : impossible de tous les mettre d’avance. Touche un thème pour installer
             ses outils d’un coup. Le reste s’installe à la demande avec « apk add ».
           </Text>
+          <Pressable
+            onPress={() => Linking.openURL(LIEN_CATALOGUE)}
+            accessibilityRole="button"
+            accessibilityLabel="Ouvrir le catalogue Alpine dans le navigateur"
+            style={({ pressed }) => [
+              styles.ligne,
+              { backgroundColor: c.carte, borderColor: c.accent, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={styles.flex}>
+              <Text style={[styles.nom, { color: c.texte }]}>📖 Catalogue Alpine (tous les outils)</Text>
+              <Text numberOfLines={1} style={[styles.detail, { color: c.accentTexte }]}>
+                Chercher parmi les 28 000+ outils, puis « apk add son-nom »
+              </Text>
+            </View>
+            <Text style={[styles.lancer, { color: c.texteDoux }]}>↗</Text>
+          </Pressable>
           {PACKS.map((pack) => (
             <Pressable
               key={pack.nom}
