@@ -110,7 +110,7 @@ export default function App() {
           {/* Le verrou reste monté en permanence (sécurité) : il ne faut jamais laisser voir le Chat
               sans lui. L'écran d'ouverture est lui-même un Modal rendu par-dessus, donc l'animation
               s'affiche au premier plan sans démonter le verrou. */}
-          <Verrou couleurs={couleurs} />
+          <Verrou couleurs={couleurs} demarrer={ouvert} />
           <Reactions couleurs={couleurs} />
           {!ouvert && <Ouverture onFini={finOuverture} />}
           <StatusBar style={nuit ? 'light' : 'dark'} />

@@ -33,7 +33,7 @@ async function telephoneSansSecurite(): Promise<boolean> {
 }
 
 /** Écran de verrouillage par empreinte / visage / code, par-dessus toute l'application. */
-export function Verrou({ couleurs: c }: { couleurs: Couleurs }) {
+export function Verrou({ couleurs: c, demarrer = true }: { couleurs: Couleurs; demarrer?: boolean }) {
   const { prefs, pret } = usePreferences();
   const [verrouille, setVerrouille] = useState(true);
   const [erreur, setErreur] = useState('');
@@ -66,13 +66,15 @@ export function Verrou({ couleurs: c }: { couleurs: Couleurs }) {
     }
   }, []);
 
-  // Au démarrage : demander l'empreinte si le verrou est activé.
+  // Au démarrage : afficher l'écran de verrouillage tout de suite, mais ne lancer l'empreinte / le
+  // visage (invite du système, qui s'affiche au-dessus de tout, y compris l'écran d'ouverture)
+  // qu'une fois l'ouverture terminée (demarrer), pour ne pas cacher l'animation.
   useEffect(() => {
     if (!pret) return;
-    if (prefs.verrou) deverrouiller();
-    else setVerrouille(false);
+    if (!prefs.verrou) { setVerrouille(false); return; }
+    if (demarrer) deverrouiller();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pret]);
+  }, [pret, demarrer]);
 
   // Reverrouiller quand on revient après plus d'une minute ailleurs.
   useEffect(() => {
