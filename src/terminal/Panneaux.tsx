@@ -17,6 +17,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { Terminal, type InfosTerminal, type OptionsSsh } from '../../modules/marceau-terminal';
 import type { Couleurs } from '../theme';
+import { usePersistant } from '../hooks/usePersistant';
 import { AideLinux } from './AideLinux';
 import { BarreTouches } from './BarreTouches';
 import { MesOutils } from './MesOutils';
@@ -83,6 +84,7 @@ function Console({
   onTaille?: (c: number, l: number) => void;
 }) {
   const [ctrl, setCtrl] = useState(false);
+  const [barre, setBarre] = usePersistant('marceau:barre-touches', true);
   return (
     <View style={styles.flex}>
       <VueTerminal
@@ -96,7 +98,17 @@ function Console({
         onInterrompre={onInterrompre}
         onCtrlUtilise={() => setCtrl(false)}
       />
-      <BarreTouches terminal={terminal} couleurs={couleurs} ctrlActif={ctrl} setCtrlActif={setCtrl} />
+      {barre && <BarreTouches terminal={terminal} couleurs={couleurs} ctrlActif={ctrl} setCtrlActif={setCtrl} />}
+      <Pressable
+        onPress={() => setBarre((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={barre ? 'Cacher la barre de touches' : 'Afficher la barre de touches'}
+        style={[styles.bascule, { borderColor: couleurs.bordure, backgroundColor: couleurs.carte }]}
+      >
+        <Text style={{ color: couleurs.texteDoux, fontSize: 12, fontWeight: '700' }}>
+          {barre ? '⌨ Cacher les touches' : '⌨ Afficher les touches'}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -636,6 +648,7 @@ const styles = StyleSheet.create({
   code: { fontFamily: 'monospace', fontSize: 13 },
   ligne: { flexDirection: 'row', gap: 10 },
   ligneInter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bascule: { alignItems: 'center', paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth },
   barreAction: {
     flexDirection: 'row',
     flexWrap: 'wrap', // petits écrans / grande police : les boutons passent à la ligne

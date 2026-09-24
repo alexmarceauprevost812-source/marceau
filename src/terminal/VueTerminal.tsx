@@ -33,6 +33,8 @@ export type PoigneeTerminal = {
   /** Active Ctrl pour la prochaine touche. */
   ctrl: (actif: boolean) => void;
   taillePolice: (delta: number) => void;
+  /** Fait défiler l'affichage de N lignes (négatif = vers le haut). */
+  defiler: (lignes: number) => void;
 };
 
 type Props = {
@@ -65,7 +67,7 @@ function page(mode: ModeSaisie, t: Theme) {
 <style>${XTERM_CSS}
 html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
 #t{position:absolute;inset:0;padding:6px 4px 0 6px}
-.xterm .xterm-viewport{background:${t.fond}!important}
+.xterm .xterm-viewport{background:${t.fond}!important;overflow-y:scroll!important;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 </style></head><body><div id="t"></div>
 <script>${XTERM_JS}</script>
 <script>${XTERM_FIT_JS}</script>
@@ -239,7 +241,8 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
     police: function(delta){
       term.options.fontSize = Math.max(8, Math.min(28, term.options.fontSize + delta));
       ajuster();
-    }
+    },
+    defiler: function(n){ term.scrollLines(n); }
   };
 
   setTimeout(function(){ ajuster(); envoyer({ type: 'pret', colonnes: term.cols, lignes: term.rows }); term.focus(); }, 60);
@@ -285,6 +288,7 @@ export const VueTerminal = forwardRef<PoigneeTerminal, Props>(function VueTermin
       touche: (s) => executer(`window.M.touche(${JSON.stringify(s)})`),
       ctrl: (a) => executer(`window.M.ctrl(${a ? 'true' : 'false'})`),
       taillePolice: (d) => executer(`window.M.police(${d})`),
+      defiler: (l) => executer(`window.M.defiler(${l})`),
     }),
     [executer, vider],
   );
@@ -336,6 +340,7 @@ export const VueTerminal = forwardRef<PoigneeTerminal, Props>(function VueTermin
         hideKeyboardAccessoryView
         setSupportMultipleWindows={false}
         overScrollMode="never"
+        nestedScrollEnabled
         style={[styles.flex, { backgroundColor: props.theme.fond }]}
       />
     </View>

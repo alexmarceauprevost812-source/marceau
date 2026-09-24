@@ -57,6 +57,8 @@ export function BarreTouches({ terminal, couleurs: c, ctrlActif, setCtrlActif }:
         terminal.current?.ctrl(a);
       }, ctrlActif, 'Contrôle')}
       {TOUCHES.map((t) => touche(t.libelle, () => terminal.current?.touche(t.sequence), false, t.nom))}
+      {touche('⤒', () => terminal.current?.defiler(-8), false, 'Monter dans le terminal')}
+      {touche('⤓', () => terminal.current?.defiler(8), false, 'Descendre dans le terminal')}
       {touche('A−', () => terminal.current?.taillePolice(-1), false, 'Texte plus petit')}
       {touche('A+', () => terminal.current?.taillePolice(1), false, 'Texte plus grand')}
     </ScrollView>
