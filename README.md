@@ -129,3 +129,6 @@ npm run typecheck
 
 Distribué sous licence [MIT](LICENSE) : vous pouvez utiliser, modifier et redistribuer
 librement ce logiciel.
+
+L'APK contient aussi d'autres logiciels libres (PRoot sous GPL-2.0, talloc sous LGPL-3.0, etc.) :
+voir [LICENCES-TIERCES.md](LICENCES-TIERCES.md). Leur code source est publié avec chaque version de l'APK.

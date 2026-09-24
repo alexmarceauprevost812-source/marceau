@@ -3,6 +3,7 @@ import { Animated, Easing, Image, Modal, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { IMAGES } from '../images';
+import { EcranLicences } from '../ecrans/EcranLicences';
 import { numeroInstalle, useMiseAJour } from '../maj/miseAJour';
 import type { Section } from '../navigation/Menu';
 import type { Couleurs } from '../theme';
@@ -36,6 +37,7 @@ type Props = {
 export function Bureau({ visible, couleurs: c, onOuvrir, onFermer }: Props) {
   const anim = useRef(new Animated.Value(0)).current;
   const [monte, setMonte] = useState(visible);
+  const [licences, setLicences] = useState(false);
   const { width, height } = useWindowDimensions();
   const { heure, date } = useHeure();
   const { maj, verifier, installer } = useMiseAJour();
@@ -57,6 +59,7 @@ export function Bureau({ visible, couleurs: c, onOuvrir, onFermer }: Props) {
   const largeurCase = Math.floor((Math.min(width, 900) - 32) / colonnes);
 
   const lancer = (app: AppBureau) => {
+    if (app.ouvre === 'licences') return setLicences(true);
     if (app.ouvre !== 'mise-a-jour') return onOuvrir(app.ouvre);
     if (maj.etat === 'disponible') return installer();
     verifier(true).then(() => {});
@@ -140,6 +143,7 @@ export function Bureau({ visible, couleurs: c, onOuvrir, onFermer }: Props) {
           </View>
         </SafeAreaView>
       </Animated.View>
+      <EcranLicences visible={licences} couleurs={c} onFermer={() => setLicences(false)} />
     </Modal>
   );
 }

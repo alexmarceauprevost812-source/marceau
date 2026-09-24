@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Plugin Expo du Terminal : évite un conflit de fichiers en double
  * (module-info.class) entre les bibliothèques SSH (JSch) et Bouncy Castle.

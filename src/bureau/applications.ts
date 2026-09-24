@@ -10,7 +10,7 @@ export type AppBureau = {
   nom: string;
   icone: string;
   couleur: string;
-  ouvre: Section | 'mise-a-jour';
+  ouvre: Section | 'mise-a-jour' | 'licences';
 };
 
 export const APPLICATIONS: AppBureau[] = [
@@ -24,5 +24,6 @@ export const APPLICATIONS: AppBureau[] = [
   { id: 'reveil', nom: 'Réveil', icone: '⏰', couleur: '#D93F3F', ouvre: 'reveil' },
   { id: 'carte', nom: 'Carte', icone: '🗺️', couleur: '#1A73E8', ouvre: 'carte' },
   { id: 'preferences', nom: 'Préférences', icone: '🎨', couleur: '#E0357A', ouvre: 'preferences' },
+  { id: 'licences', nom: 'Licences', icone: '⚖️', couleur: '#3C4A5C', ouvre: 'licences' },
   { id: 'mise-a-jour', nom: 'Mise à jour', icone: '⬇️', couleur: '#8B3FE0', ouvre: 'mise-a-jour' },
 ];

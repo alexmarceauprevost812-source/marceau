@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 package org.marceau.terminal
 
 import android.content.Context

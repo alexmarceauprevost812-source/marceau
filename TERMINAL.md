@@ -22,10 +22,38 @@ Le terminal ne fonctionne que dans l'APK Android (pas sur iOS, le web ni Expo Go
 | `src/terminal/` | Affichage (xterm.js dans une WebView), barre de touches, panneaux |
 | `src/ecrans/EcranTerminal.tsx` | L'écran et ses onglets |
 | `scripts/xterm-bundle.js` | Emballe xterm.js hors ligne (lancé après `npm install`) |
-| `scripts/preparer-linux.js` | Télécharge PRoot depuis les paquets Termux pendant le build (`eas-build-post-install`) |
+| `scripts/construire-linux.sh` | Compile PRoot, talloc et libandroid-shmem **à partir du code source** pendant le build (`eas-build-post-install`) |
+| `scripts/licences.js` | Prépare la liste des licences affichée dans l'appli (Bureau → Licences) |
+| `licences/` | Textes complets des licences des composants natifs |
 
 Android n'exécute que les programmes livrés dans l'APK : PRoot est donc placé dans `jniLibs` sous le nom
 `libproot.so`, et `useLegacyPackaging` (app.json) garde ces fichiers extraits sur le téléphone.
-Si PRoot ne peut pas être téléchargé, l'APK se construit quand même : l'onglet Linux l'indique.
+Si PRoot ne peut pas être compilé (pas de NDK, source introuvable), l'APK se construit quand même :
+l'onglet Linux l'indique.
 
-Test à la main du téléchargement de PRoot : `npm run preparer-linux`.
+Compiler PRoot à la main (NDK Android requis) : `npm run preparer-linux`.
+
+## Licences
+
+Le code du Terminal (Kotlin, C, TypeScript) fait partie de Marceau : **MIT**.
+Il inclut ou utilise ces logiciels libres :
+
+| Composant | Licence | Comment il est inclus |
+| --- | --- | --- |
+| PRoot (fork Termux) 5.1.107.94 | GPL-2.0-or-later | Compilé depuis la source, programme séparé (`libproot.so`) |
+| talloc 2.4.3 | LGPL-3.0-or-later | Compilé depuis la source, lié statiquement dans PRoot |
+| libandroid-shmem 0.7 | BSD-3-Clause | Compilé depuis la source, lié statiquement dans PRoot |
+| JSch (fork mwiede) 0.2.20 | BSD-3-Clause | Bibliothèque Java (Maven Central) |
+| Bouncy Castle 1.78.1 | MIT | Bibliothèque Java (Maven Central) |
+| xterm.js + addon-fit | MIT | Emballé dans l'appli (`scripts/xterm-bundle.js`) |
+| Alpine Linux | Divers (libres) | **Non inclus** : téléchargé par le téléphone depuis les serveurs d'Alpine |
+
+PRoot est lancé comme un programme séparé : il ne change pas la licence de Marceau.
+
+**Obligations GPL / LGPL.** Le code source exact de PRoot, talloc et libandroid-shmem (versions épinglées
+par empreinte SHA-256) et le script de compilation sont publiés avec **chaque** version GitHub de l'APK
+(fichier `marceau-sources-linux.tar.gz`). Pour le préparer à la main : `npm run sources-linux`.
+Les textes complets des licences sont dans `licences/` et dans l'appli (Bureau → Licences).
+
+Quand une version change, mettre à jour ensemble : `scripts/construire-linux.sh` (version + SHA-256),
+`scripts/licences.js` et le tableau ci-dessus.

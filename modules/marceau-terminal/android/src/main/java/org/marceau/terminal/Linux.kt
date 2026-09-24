@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 package org.marceau.terminal
 
 import android.content.Context
@@ -26,7 +27,9 @@ internal object Linux {
   private fun racine(ctx: Context) = File(dossier(ctx), "racine")
   private fun natif(ctx: Context, nom: String) = File(ctx.applicationInfo.nativeLibraryDir, nom)
 
-  fun prootDisponible(ctx: Context) = natif(ctx, "libproot.so").exists()
+  // PRoot est compilé pour Android 8+ (libandroid-shmem utilise ASharedMemory).
+  fun prootDisponible(ctx: Context) =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && natif(ctx, "libproot.so").exists()
 
   fun installe(ctx: Context) = File(racine(ctx), MARQUEUR).exists()
 
@@ -43,7 +46,7 @@ internal object Linux {
   /** Télécharge et installe Alpine Linux (environ 4 Mo). */
   fun installer(ctx: Context, progression: (String, Int) -> Unit) {
     if (!prootDisponible(ctx)) {
-      throw IOException("PRoot n'est pas inclus dans cet APK (voir scripts/preparer-linux.js).")
+      throw IOException("Le Linux intégré demande Android 8 ou plus récent, et PRoot inclus dans l'APK (voir scripts/construire-linux.sh).")
     }
     val arch = archAlpine()
     val base = "https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/$arch"
@@ -175,13 +178,16 @@ internal object Linux {
     // Met à jour un Linux installé avant cette version (dépôts épinglés, commande « outils »).
     migrerConfig(ctx)
     val dossier = dossier(ctx)
-    // PRoot a besoin de libtalloc.so.2 ; Android l'a installée sous le nom libtalloc.so.
-    // Ses autres bibliothèques (libandroid-shmem.so) sont trouvées dans le dossier natif.
+    // PRoot compilé par scripts/construire-linux.sh contient talloc et libandroid-shmem
+    // (liés statiquement). Pour un ancien APK qui les avait en bibliothèques séparées,
+    // libtalloc.so est rendue visible sous son nom attendu (libtalloc.so.2).
     // Le lien est recréé à chaque fois : le dossier natif change à chaque mise à jour.
     val lib = File(dossier, "lib").apply { mkdirs() }
     val talloc = File(lib, "libtalloc.so.2")
     talloc.delete()
-    Os.symlink(natif(ctx, "libtalloc.so").absolutePath, talloc.absolutePath)
+    if (natif(ctx, "libtalloc.so").exists()) {
+      Os.symlink(natif(ctx, "libtalloc.so").absolutePath, talloc.absolutePath)
+    }
     val tmp = File(ctx.cacheDir, "proot").apply { mkdirs() }
 
     val env = mutableListOf(

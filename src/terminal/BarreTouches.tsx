@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import type { RefObject } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
