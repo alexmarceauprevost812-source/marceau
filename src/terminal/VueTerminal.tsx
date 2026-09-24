@@ -13,8 +13,12 @@ export type Theme = {
   fond: string;
   /** Couleur des réponses (sortie des programmes). */
   texte: string;
-  /** Couleur de ce que l'utilisateur tape. */
+  /** Couleur des arguments que l'utilisateur tape. */
   saisie: string;
+  /** Couleur du nom de la commande (1er mot tapé). */
+  commande: string;
+  /** Couleur des messages d'erreur du shell (« mauvaise commande »). */
+  erreur: string;
   curseur: string;
   selection: string;
 };
@@ -68,8 +72,33 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
 (function(){
   var MODE = ${JSON.stringify(mode)};
   var SAISIE = ${JSON.stringify(ansi(t.saisie))};
-  var FIN_SAISIE = '\\x1b[39m';
-  var blanc = function(s){ return SAISIE + s + FIN_SAISIE; };
+  var COMMANDE = ${JSON.stringify(ansi(t.commande))};
+  var ERREUR = ${JSON.stringify(ansi(t.erreur))};
+  var FIN = '\\x1b[39m';
+  // On est dans le NOM de la commande (1er mot) tant qu'aucune espace n'a été tapée : il s'affiche en
+  // or, le reste de la ligne (arguments) en vert lime. Remis à vrai à chaque nouvelle commande.
+  var enCommande = true;
+  function colorerCar(c){
+    if (enCommande) {
+      if (c === ' ' || c === '\\t') { enCommande = false; return SAISIE + c + FIN; }
+      return COMMANDE + c + FIN;
+    }
+    return SAISIE + c + FIN;
+  }
+  function colorerSaisie(s){ var o = ''; for (var i = 0; i < s.length; i++) o += colorerCar(s.charAt(i)); return o; }
+  // Colorie une ligne complète (mode ligne) : 1er mot en or, reste en vert lime.
+  function rendreLigne(s){
+    var sp = -1;
+    for (var i = 0; i < s.length; i++) { var ch = s.charAt(i); if (ch === ' ' || ch === '\\t') { sp = i; break; } }
+    if (sp < 0) return s.length ? COMMANDE + s + FIN : '';
+    return COMMANDE + s.slice(0, sp) + FIN + SAISIE + s.slice(sp) + FIN;
+  }
+  // Messages d'erreur du shell mis en rouge (le shell ne signale une mauvaise commande qu'après l'avoir essayée).
+  var MOTIFS_ERREUR = [/not found/gi, /No such file or directory/gi, /Permission denied/gi];
+  function colorerErreurs(s){
+    for (var i = 0; i < MOTIFS_ERREUR.length; i++) s = s.replace(MOTIFS_ERREUR[i], function(m){ return ERREUR + m + FIN; });
+    return s;
+  }
   var envoyer = function(m){ window.ReactNativeWebView.postMessage(JSON.stringify(m)); };
   var term = new Terminal({
     cursorBlink: true,
@@ -108,14 +137,16 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
 
   // ----- Mode ligne (Termux) -----
   var ligne = '', historique = [], position = 0;
-  function remplacerLigne(nouvelle){
-    for (var i = 0; i < Array.from(ligne).length; i++) term.write('\\b \\b');
-    ligne = nouvelle; term.write(blanc(ligne));
+  // Efface la ligne affichée puis la redessine colorée (1er mot or, reste lime).
+  function afficherLigne(nouvelle){
+    var vieux = Array.from(ligne).length;
+    for (var i = 0; i < vieux; i++) term.write('\\b \\b');
+    ligne = nouvelle; term.write(rendreLigne(ligne));
   }
   function saisieLigne(d){
     if (d.charAt(0) === '\\x1b') {
-      if (d === '\\x1b[A' && position > 0) { position--; remplacerLigne(historique[position]); }
-      else if (d === '\\x1b[B') { if (position < historique.length) position++; remplacerLigne(historique[position] || ''); }
+      if (d === '\\x1b[A' && position > 0) { position--; afficherLigne(historique[position]); }
+      else if (d === '\\x1b[B') { if (position < historique.length) position++; afficherLigne(historique[position] || ''); }
       return;
     }
     var car = Array.from(d);
@@ -128,13 +159,13 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
         envoyer({ type: 'ligne', texte: ligne });
         ligne = '';
       } else if (c === '\\x7f' || c === '\\b') {
-        if (ligne) { var a = Array.from(ligne); a.pop(); ligne = a.join(''); term.write('\\b \\b'); }
+        if (ligne) { var a = Array.from(ligne); a.pop(); afficherLigne(a.join('')); }
       } else if (c === '\\x03') {
         term.write('^C\\r\\n'); ligne = ''; envoyer({ type: 'interrompre' });
       } else if (c === '\\x0c') {
         term.clear();
       } else if (c >= ' ' || c === '\\t') {
-        ligne += c; term.write(blanc(c));
+        afficherLigne(ligne + c);
       }
     }
   }
@@ -146,7 +177,7 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
     if (d.length > 0 && d.charAt(0) !== '\\x1b' && d.charCodeAt(0) >= 32 && d.indexOf('\\r') < 0) {
       tapes = (tapes + d).slice(-512);
     } else {
-      tapes = ''; // Entrée, flèches, Ctrl… : on repart à zéro
+      tapes = ''; enCommande = true; // Entrée, flèches, Ctrl… : nouvelle commande, on repart au 1er mot
     }
   }
   function colorerEcho(t){
@@ -155,7 +186,7 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
     while (n < t.length && n < tapes.length && t.charAt(n) === tapes.charAt(n)) n++;
     if (n === 0) return t;
     tapes = tapes.slice(n);
-    return blanc(t.slice(0, n)) + t.slice(n);
+    return colorerSaisie(t.slice(0, n)) + t.slice(n);
   }
 
   term.onData(function(d){
@@ -165,7 +196,7 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
   });
 
   window.M = {
-    ecrire: function(t){ term.write(colorerEcho(t)); },
+    ecrire: function(t){ term.write(colorerErreurs(colorerEcho(t))); },
     effacer: function(){ term.clear(); },
     focus: function(){ term.focus(); },
     touche: function(s){ term.input(s, true); },
