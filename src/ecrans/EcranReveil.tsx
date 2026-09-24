@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -17,6 +17,9 @@ const heureValide = (h: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(h.trim());
 export function EcranReveil({ visible, couleurs: c, onFermer }: Props) {
   const [reveils, setReveils] = usePersistant<Reveil[]>('marceau:reveils', []);
   const [heure, setHeure] = useState('07:00');
+  // Réveils dont l'activation/désactivation est en cours : évite qu'un double appui programme
+  // deux notifications (dont une deviendrait « orpheline », impossible à annuler ensuite).
+  const enCours = useRef<Set<string>>(new Set());
 
   const programmer = async (r: Reveil): Promise<string | null> => {
     const [hh, mm] = r.heure.split(':').map(Number);
@@ -42,14 +45,21 @@ export function EcranReveil({ visible, couleurs: c, onFermer }: Props) {
   };
 
   const basculer = async (id: string) => {
+    // Ignore un second appui tant que le premier n'est pas terminé (sinon double programmation).
+    if (enCours.current.has(id)) return;
     const r = reveils.find((x) => x.id === id);
     if (!r) return;
-    if (r.actif) {
-      await annulerRappel(r.notifId);
-      setReveils((l) => l.map((x) => (x.id === id ? { ...x, actif: false, notifId: undefined } : x)));
-    } else {
-      const notifId = await programmer(r);
-      setReveils((l) => l.map((x) => (x.id === id ? { ...x, actif: !!notifId, notifId: notifId ?? undefined } : x)));
+    enCours.current.add(id);
+    try {
+      if (r.actif) {
+        await annulerRappel(r.notifId);
+        setReveils((l) => l.map((x) => (x.id === id ? { ...x, actif: false, notifId: undefined } : x)));
+      } else {
+        const notifId = await programmer(r);
+        setReveils((l) => l.map((x) => (x.id === id ? { ...x, actif: !!notifId, notifId: notifId ?? undefined } : x)));
+      }
+    } finally {
+      enCours.current.delete(id);
     }
   };
 
