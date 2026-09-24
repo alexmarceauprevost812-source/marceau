@@ -171,6 +171,7 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
           horizontal
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          style={styles.projetsBarre}
           contentContainerStyle={styles.projets}
         >
           {projets.map((p) => {
@@ -376,8 +377,9 @@ const styles = StyleSheet.create({
   boutonIA: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999 },
   boutonIATexte: { fontSize: 15, fontWeight: '700' },
   sousTitre: { fontSize: 15, marginTop: 4 },
-  projets: { paddingHorizontal: 20, paddingBottom: 10, gap: 8, flexDirection: 'row' },
-  puceProjet: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, justifyContent: 'center' },
+  projetsBarre: { flexGrow: 0, flexShrink: 0 },
+  projets: { paddingHorizontal: 20, paddingBottom: 10, gap: 8, alignItems: 'center' },
+  puceProjet: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, justifyContent: 'center', alignSelf: 'flex-start' },
   fondModale: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 24 },
   modale: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 18, gap: 14 },
   titreModale: { fontSize: 18, fontWeight: '800' },
