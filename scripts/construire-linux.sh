@@ -184,13 +184,17 @@ EOF
   ) || { avertir "$abi : échec de talloc (voir $src/talloc-${TALLOC_VERSION}/*.log)"; return 1; }
 
   # libandroid-shmem (bibliothèque statique)
-  # shmem.c utilise _PATH_TMP (de <paths.h>) pour le chemin d'un lien symbolique, mais le NDK
-  # récent (bionic) ne définit plus cette macro : on la fournit à la compilation (sans modifier
-  # la source) en pointant vers un dossier privé inscriptible par l'application.
+  # shmem.c crée ses liens symboliques dans _PATH_TMP, un chemin fixé à la compilation (et que le
+  # NDK récent ne définit même plus). Un chemin fixe ne convient pas : le dossier privé de l'appli
+  # dépend de l'utilisateur Android (/data/user/<n>/…, profil pro…). MODIFICATION (LGPL, publiée
+  # avec les sources via ce script) : le dossier est lu au lancement dans PROOT_TMP_DIR, que
+  # Linux.kt fournit (cache privé de l'appli). _PATH_TMP reste défini pour la macro d'origine.
   tar -xzf "$SOURCES/libandroid-shmem-${SHMEM_VERSION}.tar.gz" -C "$src"
   (
     cd "$src/libandroid-shmem-${SHMEM_VERSION}" || exit 1
-    "$CC" -fPIC -std=gnu11 -O2 -D_PATH_TMP='"/data/data/org.marceau.app/cache/"' -c shmem.c -o shmem.o &&
+    grep -q 'sprintf(symlink_path, ASHV_KEY_SYMLINK_PATH, key);' shmem.c || exit 1
+    sed -i.orig 's|sprintf(symlink_path, ASHV_KEY_SYMLINK_PATH, key);|snprintf(symlink_path, sizeof(symlink_path), "%s/ashv_key_%d", getenv("PROOT_TMP_DIR") ? getenv("PROOT_TMP_DIR") : "/data/local/tmp", key); /* Marceau : dossier lu au lancement */|' shmem.c &&
+      "$CC" -fPIC -std=gnu11 -O2 -D_PATH_TMP='"/data/local/tmp/"' -c shmem.c -o shmem.o &&
       "$AR" rcs "$dep/lib/libandroid-shmem.a" shmem.o &&
       cp shm.h "$dep/include/sys/shm.h"
   ) || { avertir "$abi : échec de libandroid-shmem"; return 1; }

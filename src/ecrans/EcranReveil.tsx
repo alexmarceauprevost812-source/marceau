@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { nouvelId, usePersistant } from '../hooks/usePersistant';
-import { annulerRappel, programmerReveil } from '../rappels/notifications';
+import { annulerRappel, nettoyerReveilsOrphelins, programmerReveil } from '../rappels/notifications';
 import type { Couleurs } from '../theme';
 
 /** Un réveil : une heure et s'il est allumé. */
@@ -15,11 +15,20 @@ const heureValide = (h: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(h.trim());
 
 /** Réveil : programme une sonnerie qui revient chaque jour à l'heure choisie. */
 export function EcranReveil({ visible, couleurs: c, onFermer }: Props) {
-  const [reveils, setReveils] = usePersistant<Reveil[]>('marceau:reveils', []);
+  const [reveils, setReveils, chargement] = usePersistant<Reveil[]>('marceau:reveils', []);
   const [heure, setHeure] = useState('07:00');
   // Réveils dont l'activation/désactivation est en cours : évite qu'un double appui programme
   // deux notifications (dont une deviendrait « orpheline », impossible à annuler ensuite).
   const enCours = useRef<Set<string>>(new Set());
+
+  // Au lancement, une fois la liste relue : annule les réveils programmés sans ligne enregistrée
+  // (appli coupée avant l'enregistrement, stockage plein…), qu'on ne pourrait plus arrêter.
+  const nettoye = useRef(false);
+  useEffect(() => {
+    if (chargement || nettoye.current) return;
+    nettoye.current = true;
+    nettoyerReveilsOrphelins(new Set(reveils.flatMap((r) => (r.notifId ? [r.notifId] : []))));
+  }, [chargement, reveils]);
 
   const programmer = async (r: Reveil): Promise<string | null> => {
     const [hh, mm] = r.heure.split(':').map(Number);

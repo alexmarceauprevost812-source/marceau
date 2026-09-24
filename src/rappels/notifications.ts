@@ -94,7 +94,25 @@ async function preparerReveil(): Promise<boolean> {
 export async function programmerReveil(heure: number, minute: number, titre = '⏰ Réveil'): Promise<string | null> {
   if (!(await preparerReveil())) return null;
   return Notifications.scheduleNotificationAsync({
-    content: { title: titre, body: "C'est l'heure de te réveiller !", sound: true },
+    content: { title: titre, body: "C'est l'heure de te réveiller !", sound: true, data: { marceau: 'reveil' } },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: heure, minute, channelId: CANAL_REVEIL },
   });
+}
+
+/**
+ * Annule les réveils programmés qui n'ont plus de ligne dans l'écran Réveil (appli fermée avant
+ * l'enregistrement, stockage plein…) : sinon ils sonneraient chaque jour sans moyen de les arrêter.
+ */
+export async function nettoyerReveilsOrphelins(connus: Set<string>): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const programmes = await Notifications.getAllScheduledNotificationsAsync();
+    for (const n of programmes) {
+      if (n.content.data?.marceau === 'reveil' && !connus.has(n.identifier)) {
+        await Notifications.cancelScheduledNotificationAsync(n.identifier).catch(() => {});
+      }
+    }
+  } catch {
+    // on réessaiera au prochain lancement
+  }
 }
