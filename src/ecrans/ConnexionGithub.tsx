@@ -30,7 +30,7 @@ export function ConnexionGithub({ visible, couleurs: c, onFermer, onConnecte, on
     setErreur(null);
     (async () => {
       try {
-        const nouveau = await demanderCode();
+        const nouveau = await demanderCode(ctrl.signal);
         if (ctrl.signal.aborted) return;
         setCode(nouveau);
         const jeton = await attendreJeton(nouveau, ctrl.signal);

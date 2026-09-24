@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { lancerAgent, type DirectAgent, type EtapeAgent, type FichiersAgent, type ResultatAgent } from '../ia/agentCodex';
@@ -122,7 +122,8 @@ export function AgentCodex({
   }, []);
   const messages = p.messagesAgent ?? [];
   const occupe = etapes !== null;
-  const total = changements ? totalChangements(changements) : null;
+  // Calculé une seule fois par passage de l'agent (pas à chaque lettre tapée dans la saisie).
+  const total = useMemo(() => (changements ? totalChangements(changements) : null), [changements]);
 
   if (connexion.fournisseur !== 'anthropic' || manqueCle(connexion)) {
     const autreIA = connexion.fournisseur !== 'anthropic';

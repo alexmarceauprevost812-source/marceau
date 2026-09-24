@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { Couleurs } from '../theme';
@@ -31,13 +31,19 @@ export function totalChangements(liste: Changement[]) {
 }
 
 /** Carte d'un fichier changé : +ajouts −retraits, puis (d'un toucher) les changements ou le code en couleur. */
-export function CarteChangement({ changement: ch, couleurs: c }: { changement: Changement; couleurs: Couleurs }) {
+export const CarteChangement = memo(function CarteChangement({
+  changement: ch,
+  couleurs: c,
+}: {
+  changement: Changement;
+  couleurs: Couleurs;
+}) {
   const [ouvert, setOuvert] = useState(false);
   const cree = ch.ancien === null;
   const supprime = ch.nouveau === null;
   // Fichier modifié : on montre d'abord les changements ; fichier créé : directement le code.
   const [vue, setVue] = useState<'changements' | 'code'>(cree ? 'code' : 'changements');
-  const { ajouts, retraits } = compterChangement(ch);
+  const { ajouts, retraits } = useMemo(() => compterChangement(ch), [ch]);
   const icone = cree ? '➕' : supprime ? '🗑' : '✏️';
   const etat = cree ? 'nouveau' : supprime ? 'supprimé' : 'modifié';
 
@@ -87,7 +93,7 @@ export function CarteChangement({ changement: ch, couleurs: c }: { changement: C
         ))}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   carte: { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },

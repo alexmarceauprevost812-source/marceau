@@ -19,9 +19,10 @@ export type CodeAppareil = {
   intervalle: number;
 };
 
-async function poster(url: string, champs: Record<string, string>) {
+async function poster(url: string, champs: Record<string, string>, signal?: AbortSignal) {
   const reponse = await fetch(url, {
     method: 'POST',
+    signal,
     headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
     body: Object.entries(champs)
       .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
@@ -32,8 +33,8 @@ async function poster(url: string, champs: Record<string, string>) {
 }
 
 /** Étape 1 : demande un code à afficher à la personne. */
-export async function demanderCode(): Promise<CodeAppareil> {
-  const r = await poster('https://github.com/login/device/code', { client_id: CLIENT_ID_GITHUB, scope: 'repo' });
+export async function demanderCode(signal?: AbortSignal): Promise<CodeAppareil> {
+  const r = await poster('https://github.com/login/device/code', { client_id: CLIENT_ID_GITHUB, scope: 'repo' }, signal);
   if (typeof r.device_code !== 'string' || typeof r.user_code !== 'string') {
     throw new Error(String(r.error_description ?? 'GitHub n’a pas donné de code. Vérifie que « Device Flow » est activé.'));
   }
@@ -46,13 +47,17 @@ export async function demanderCode(): Promise<CodeAppareil> {
   };
 }
 
+const annulee = () => Object.assign(new Error('Connexion annulée.'), { name: 'AbortError' });
+
 const attendre = (ms: number, signal: AbortSignal) =>
   new Promise<void>((ok, echec) => {
+    // Déjà annulée (fenêtre fermée pendant une requête) : on s'arrête tout de suite.
+    if (signal.aborted) return echec(annulee());
     const t = setTimeout(ok, ms);
     signal.addEventListener('abort', () => {
       clearTimeout(t);
-      echec(Object.assign(new Error('Connexion annulée.'), { name: 'AbortError' }));
-    });
+      echec(annulee());
+    }, { once: true });
   });
 
 /** Étape 2 : attend que la personne accepte sur GitHub, puis renvoie le jeton d'accès. */
@@ -61,11 +66,15 @@ export async function attendreJeton(code: CodeAppareil, signal: AbortSignal): Pr
   for (;;) {
     await attendre(intervalle * 1000, signal);
     if (Date.now() > code.expireA) throw new Error('Le code a expiré. Recommence la connexion.');
-    const r = await poster('https://github.com/login/oauth/access_token', {
-      client_id: CLIENT_ID_GITHUB,
-      device_code: code.codeAppareil,
-      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-    });
+    const r = await poster(
+      'https://github.com/login/oauth/access_token',
+      {
+        client_id: CLIENT_ID_GITHUB,
+        device_code: code.codeAppareil,
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      },
+      signal,
+    );
     if (typeof r.access_token === 'string' && r.access_token) return r.access_token;
     switch (r.error) {
       case 'authorization_pending':

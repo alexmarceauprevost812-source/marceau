@@ -254,9 +254,10 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
                   couleurs={c}
                   onFermer={() => setConnexionGithub(false)}
                   onConnecte={async (jeton, login) => {
-                    const suivant = { ...brouillon, jetonGithub: jeton };
-                    setBrouillon(suivant);
-                    await enregistrer(suivant);
+                    // On n'enregistre que le jeton (sur les réglages déjà validés) : les autres
+                    // modifications du brouillon restent annulables avec « Annuler ».
+                    setBrouillon((b) => ({ ...b, jetonGithub: jeton }));
+                    await enregistrer({ ...reglages, jetonGithub: jeton });
                     setTestGithub({ ok: true, texte: `Connecté à GitHub : ${login} ✓` });
                     setConnexionGithub(false);
                   }}
