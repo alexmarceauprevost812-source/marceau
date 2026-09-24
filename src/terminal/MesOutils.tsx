@@ -21,6 +21,29 @@ type Commande = { id: string; nom: string; commande: string };
 /** Catalogue officiel de tous les paquets Alpine (ce que « apk add » peut installer). */
 const LIEN_CATALOGUE = 'https://pkgs.alpinelinux.org/packages';
 
+/**
+ * Le programme à lancer pour un paquet dont le nom diffère du binaire.
+ * `null` = paquet sans commande à lancer (données, bibliothèque, jeu de scripts) : on ne le rend pas cliquable.
+ * Absent de la table = on lance le nom du paquet tel quel.
+ */
+const COMMANDE_OUTIL: Record<string, string | null> = {
+  'py3-pip': 'pip3',
+  'bind-tools': 'dig',
+  'netcat-openbsd': 'nc',
+  'wireless-tools': 'iwconfig',
+  openssh: 'ssh',
+  'openssh-client': 'ssh',
+  wireshark: 'tshark',
+  'nmap-scripts': null,
+  'ca-certificates': null,
+};
+
+/** Comment lancer un outil installé : sa commande, ou null s'il n'a rien à lancer directement. */
+function commandeOutil(paquet: string): string | null {
+  if (paquet in COMMANDE_OUTIL) return COMMANDE_OUTIL[paquet];
+  return paquet;
+}
+
 /** Un pack d'outils à installer d'un toucher (thème → paquets Alpine). */
 type Pack = { nom: string; icone: string; paquets: string[] };
 
@@ -222,21 +245,39 @@ export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
                 {outils.length} outil{outils.length > 1 ? 's' : ''} installé{outils.length > 1 ? 's' : ''}. Touche un
                 outil pour le lancer dans le terminal.
               </Text>
-              {outils.map((o) => (
-                <Pressable
-                  key={o}
-                  onPress={() => onLancer(o)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Lancer ${o}`}
-                  style={({ pressed }) => [
-                    styles.ligne,
-                    { backgroundColor: c.carte, borderColor: c.bordure, opacity: pressed ? 0.7 : 1 },
-                  ]}
-                >
-                  <Text style={[styles.cmd, { color: c.accentTexte }]}>{o}</Text>
-                  <Text style={[styles.lancer, { color: c.texteDoux }]}>▶</Text>
-                </Pressable>
-              ))}
+              {outils.map((o) => {
+                const cmd = commandeOutil(o);
+                // Paquet sans programme à lancer (données, bibliothèque) : affiché mais pas cliquable.
+                if (cmd === null) {
+                  return (
+                    <View
+                      key={o}
+                      style={[styles.ligne, { backgroundColor: c.carte, borderColor: c.bordure }]}
+                    >
+                      <Text style={[styles.cmd, { color: c.texteDoux }]}>{o}</Text>
+                      <Text style={{ color: c.texteDoux, fontSize: 12 }}>(pas de commande)</Text>
+                    </View>
+                  );
+                }
+                return (
+                  <Pressable
+                    key={o}
+                    onPress={() => onLancer(cmd)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Lancer ${cmd}`}
+                    style={({ pressed }) => [
+                      styles.ligne,
+                      { backgroundColor: c.carte, borderColor: c.bordure, opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
+                    <View style={styles.flex}>
+                      <Text style={[styles.cmd, { color: c.accentTexte }]}>{cmd}</Text>
+                      {cmd !== o && <Text style={{ color: c.texteDoux, fontSize: 12 }}>paquet : {o}</Text>}
+                    </View>
+                    <Text style={[styles.lancer, { color: c.texteDoux }]}>▶</Text>
+                  </Pressable>
+                );
+              })}
               <Text style={[styles.pied, { color: c.texteDoux }]}>
                 Si un outil ne se lance pas, son programme porte peut-être un autre nom : essaie « apk info -L {'<outil>'} ».
                 Pour en retirer un : « apk del {'<outil>'} ».

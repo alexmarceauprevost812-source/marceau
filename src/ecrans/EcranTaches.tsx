@@ -96,7 +96,14 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
             // Tâches : annuler leurs rappels, puis effacer leur clé.
             const brut = await AsyncStorage.getItem(cleTaches(p.id));
             const taches: Tache[] = brut ? JSON.parse(brut) : [];
-            await Promise.all(taches.map((t) => annulerRappel(t.rappel?.id)));
+            const resultats = await Promise.all(taches.map((t) => annulerRappel(t.rappel?.id)));
+            if (resultats.some((ok) => !ok)) {
+              // Un rappel n'a pas pu être annulé : on prévient (il pourrait encore sonner une fois).
+              Alert.alert(
+                'Attention',
+                'Certains rappels de ce projet n’ont pas pu être annulés et pourraient sonner encore une fois.',
+              );
+            }
             await AsyncStorage.removeItem(cleTaches(p.id));
             // Discussions : supprimer les pièces jointes (images, PDF) puis leur stockage.
             const convs = (await lirePersistant<Conversation[]>(cleConversations(p.id))) ?? [];
