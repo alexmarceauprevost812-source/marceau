@@ -27,6 +27,7 @@ import { Entete, PuceIA } from '../ui/Entete';
 import { Explorateur } from '../ui/Explorateur';
 import { blocsAvecFichier, POLICE_CODE, type BlocCode } from '../ui/Markdown';
 import { assemblerHTML, pagePrincipale, Studio } from '../ui/Studio';
+import { connexionDirectePossible } from '../ia/connexionGithub';
 import { ConnexionGithub } from './ConnexionGithub';
 import { EnvoiGithub } from './EnvoiGithub';
 
@@ -318,7 +319,7 @@ function VueProjet({
               </Pressable>
             )}
             <Pressable
-              onPress={() => (reglages.jetonGithub.trim() ? setEnvoi(true) : setConnexionGithub(true))}
+              onPress={() => (reglages.jetonGithub.trim() ? setEnvoi(true) : connexionDirectePossible() ? setConnexionGithub(true) : ouvrirReglages('codex'))}
               accessibilityLabel={p.github ? 'Envoyer sur GitHub' : 'Publier sur GitHub'}
               style={[styles.boutonGithub, { backgroundColor: c.accent, borderColor: c.accent }]}
             >
@@ -622,11 +623,13 @@ function NouveauProjet({
                 </>
               ) : (
                 <Pressable
-                  onPress={() => setConnexionGithub(true)}
+                  onPress={() => (connexionDirectePossible() ? setConnexionGithub(true) : (fermer(), ouvrirReglages('codex')))}
                   style={[styles.boutonSecondaire, { borderColor: c.accent, alignSelf: 'stretch' }]}
                 >
                   <Text style={{ color: c.accentTexte, fontWeight: '700', lineHeight: 20 }}>
-                    🐙 Se connecter avec GitHub pour voir tes dépôts, même privés, et envoyer tes changements →
+                    {connexionDirectePossible()
+                      ? '🐙 Se connecter avec GitHub pour voir tes dépôts, même privés, et envoyer tes changements →'
+                      : 'Ajoute ton jeton GitHub (Réglages IA → Codex) pour voir tes dépôts, même privés, et envoyer tes changements →'}
                   </Text>
                 </Pressable>
               )}
