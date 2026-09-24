@@ -39,12 +39,15 @@ SHMEM_URL="https://github.com/termux/libandroid-shmem/archive/refs/tags/v${SHMEM
 SHMEM_SHA256=1e5ff8459bc0a8c229dd8a94b27d119987e09ef3414331c2b5ebfff20b98e867
 
 # Dossier Android → cible du compilateur du NDK
-declare -A CIBLES=(
-  [arm64-v8a]=aarch64-linux-android
-  [armeabi-v7a]=armv7a-linux-androideabi
-  [x86_64]=x86_64-linux-android
-  [x86]=i686-linux-android
-)
+# (fonction plutôt que tableau associatif : compatible avec le Bash 3.2 de macOS)
+cible_abi() {
+  case "$1" in
+    arm64-v8a) echo aarch64-linux-android ;;
+    armeabi-v7a) echo armv7a-linux-androideabi ;;
+    x86_64) echo x86_64-linux-android ;;
+    x86) echo i686-linux-android ;;
+  esac
+}
 
 info() { echo "[linux] $*"; }
 avertir() { echo "[linux] ATTENTION : $*" >&2; }
@@ -128,7 +131,8 @@ trouver_ndk() {
 
 # ---- Compilation pour un processeur ------------------------------------------------------
 construire_abi() { # abi
-  local abi="$1" cible="${CIBLES[$1]}"
+  local abi="$1" cible
+  cible="$(cible_abi "$1")"
   local cc="$OUTILS/${cible}${API}-clang"
   local dep="$TRAVAIL/$abi/dep" src="$TRAVAIL/$abi/src"
   # On efface d'abord la sortie de cet ABI : si le téléchargement ou la compilation échoue,
@@ -220,6 +224,10 @@ EOF
 # ---- Programme principal ------------------------------------------------------------------
 sources_seulement=0
 [ "${1:-}" = "--sources" ] && sources_seulement=1
+
+# Compilation : on efface d'abord toutes les sorties natives, pour qu'un échec (même de
+# téléchargement) ne laisse jamais d'anciens binaires PRoot périmés dans l'APK.
+[ "$sources_seulement" = 1 ] || rm -rf "$JNILIBS"
 
 if ! telecharger_tout; then
   # En mode « sources seulement », l'archive GPL/LGPL est obligatoire : on échoue pour que la
