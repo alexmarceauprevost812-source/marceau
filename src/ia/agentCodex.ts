@@ -241,14 +241,21 @@ async function appeler(
   const blocs: BlocContenu[] = [];
   const jsons = new Map<number, string>();
   const invalides = new Map<string, string>();
+  const dernierParse = new Map<number, number>();
   let stop: string | null = null;
   let fini = false;
 
-  const direct = (index: number) => {
+  const direct = (index: number, forcer = false) => {
     const b = blocs[index];
     if (!onDirect || !b) return;
     if (b.type === 'text') onDirect({ type: 'texte', texte: chaine(b.text) });
     else if (b.type === 'tool_use' && (b.name === 'ecrire_fichier' || b.name === 'modifier_fichier')) {
+      // champsPartiels relit tout le JSON accumulé : sur un gros fichier, le refaire à chaque
+      // petit morceau serait quadratique. On ne relit donc au plus qu'une fois toutes les 50 ms
+      // (et une dernière fois à la fin du bloc, via forcer=true).
+      const maintenant = Date.now();
+      if (!forcer && maintenant - (dernierParse.get(index) ?? 0) < 50) return;
+      dernierParse.set(index, maintenant);
       const champs = champsPartiels(jsons.get(index) ?? '');
       const code = b.name === 'ecrire_fichier' ? champs.contenu : champs.nouveau;
       if (code !== undefined) {
@@ -286,6 +293,7 @@ async function appeler(
       }
       case 'content_block_stop': {
         const b = blocs[ev.index];
+        direct(ev.index, true); // dernière relecture : montrer le code complet du bloc
         if (b?.type === 'tool_use') {
           const brut = jsons.get(ev.index) ?? '';
           try {
