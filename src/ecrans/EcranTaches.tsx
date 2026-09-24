@@ -43,8 +43,8 @@ const cleConversations = (id: string) => (id === 'defaut' ? 'marceau:projet-conv
 
 /** Écran Projet : plusieurs projets, chacun avec ses tâches et ses discussions. */
 export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
-  const [projets, setProjets] = usePersistant<ProjetT[]>('marceau:projets', [PROJET_DEFAUT]);
-  const [projetActif, setProjetActif] = usePersistant('marceau:projet-actif', 'defaut');
+  const [projets, setProjets] = usePersistant<ProjetT[]>('marceau:taches-projets', [PROJET_DEFAUT]);
+  const [projetActif, setProjetActif] = usePersistant('marceau:taches-projet-actif', 'defaut');
   // Le projet choisi existe toujours (sinon on retombe sur le premier).
   const projet = projets.find((p) => p.id === projetActif) ?? projets[0] ?? PROJET_DEFAUT;
 

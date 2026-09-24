@@ -42,16 +42,17 @@ const PACKS: Pack[] = [
 function commandeInstall(paquets: string[]): string {
   const liste = paquets.join(' ');
   return (
-    // La mise à jour doit réussir, sinon on s'arrête (sans prétendre que les outils sont absents).
-    'apk update || { echo; echo "Echec de la mise a jour (connexion Internet ?). Reessaie."; exit 0; }; ' +
-    'ok=0; total=0; for p in ' +
+    // La mise à jour doit réussir. On n'utilise PAS « exit » (ce shell est interactif : « exit »
+    // fermerait le terminal). On enveloppe donc tout dans un if/else.
+    'if apk update; then ok=0; total=0; for p in ' +
     liste +
     '; do total=$((total+1)); if apk add "$p" >/dev/null 2>&1; then ok=$((ok+1)); echo "  [ok] $p"; ' +
     // On distingue « pas dans Alpine » (recherche exacte vide) d'un vrai échec (connexion, disque).
     'elif [ -z "$(apk search -x "$p" 2>/dev/null)" ]; then echo "  [absent d Alpine] $p"; ' +
     'else echo "  [echec] $p (connexion ou espace disque)"; fi; done; ' +
     'echo; echo "$ok/$total installes. [absent] = pas dans Alpine (apk search <mot>) ; [echec] = reessaie. ' +
-    'Sers-toi de ces outils uniquement sur TES appareils et reseaux, ou avec autorisation ecrite."'
+    'Sers-toi de ces outils uniquement sur TES appareils et reseaux, ou avec autorisation ecrite."; ' +
+    'else echo; echo "Echec de la mise a jour (connexion Internet ?). Reessaie."; fi'
   );
 }
 
