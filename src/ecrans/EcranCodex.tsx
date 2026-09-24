@@ -27,6 +27,7 @@ import { Entete, PuceIA } from '../ui/Entete';
 import { Explorateur } from '../ui/Explorateur';
 import { blocsAvecFichier, POLICE_CODE, type BlocCode } from '../ui/Markdown';
 import { assemblerHTML, pagePrincipale, Studio } from '../ui/Studio';
+import { ConnexionGithub } from './ConnexionGithub';
 import { EnvoiGithub } from './EnvoiGithub';
 
 /** Taille du projet envoyée à l'IA (Claude accepte beaucoup plus de contexte). */
@@ -204,9 +205,10 @@ function VueProjet({
   const [onglet, setOnglet] = useState<'discussion' | 'agent' | 'code'>('discussion');
   const [studio, setStudio] = useState<{ html: string; titre: string } | null>(null);
   const [envoi, setEnvoi] = useState(false);
+  const [connexionGithub, setConnexionGithub] = useState(false);
   const [maj, setMaj] = useState<string | null>(null);
   const connexion = useConnexion('codex');
-  const { reglages, ouvrirReglages } = useReglagesIA();
+  const { reglages, ouvrirReglages, enregistrer: enregistrerReglages } = useReglagesIA();
   const contenus = useMemo(() => Object.fromEntries(p.fichiers.map((f) => [f.chemin, f.contenu])), [p.fichiers]);
   const changements = useMemo(() => (p.github ? changementsDuProjet(p) : []), [p]);
   const page = pagePrincipale(p.fichiers);
@@ -315,7 +317,7 @@ function VueProjet({
               </Pressable>
             )}
             <Pressable
-              onPress={() => (reglages.jetonGithub.trim() ? setEnvoi(true) : ouvrirReglages('codex'))}
+              onPress={() => (reglages.jetonGithub.trim() ? setEnvoi(true) : setConnexionGithub(true))}
               accessibilityLabel={p.github ? 'Envoyer sur GitHub' : 'Publier sur GitHub'}
               style={[styles.boutonGithub, { backgroundColor: c.accent, borderColor: c.accent }]}
             >
@@ -429,6 +431,20 @@ function VueProjet({
         onFermer={() => setEnvoi(false)}
         onSynchronise={(nouveau) => onModifier(() => nouveau)}
       />
+      <ConnexionGithub
+        visible={connexionGithub}
+        couleurs={c}
+        onFermer={() => setConnexionGithub(false)}
+        onConnecte={async (jeton) => {
+          await enregistrerReglages({ ...reglages, jetonGithub: jeton });
+          setConnexionGithub(false);
+          setEnvoi(true);
+        }}
+        onJetonManuel={() => {
+          setConnexionGithub(false);
+          ouvrirReglages('codex');
+        }}
+      />
       <Studio html={studio?.html ?? null} titre={studio?.titre ?? ''} couleurs={c} onFermer={() => setStudio(null)} />
     </View>
   );
@@ -445,9 +461,10 @@ function NouveauProjet({
   onFermer: () => void;
   onCreer: (nom: string, description: string, fichiers?: Fichier[], github?: LienGithub) => void;
 }) {
-  const { reglages, ouvrirReglages } = useReglagesIA();
+  const { reglages, ouvrirReglages, enregistrer } = useReglagesIA();
   const jeton = reglages.jetonGithub;
   const [mode, setMode] = useState<'vide' | 'github'>('vide');
+  const [connexionGithub, setConnexionGithub] = useState(false);
   const [depots, setDepots] = useState<Depot[] | null>(null);
   const [chargementDepots, setChargementDepots] = useState(false);
   const [filtre, setFiltre] = useState('');
@@ -604,17 +621,28 @@ function NouveauProjet({
                 </>
               ) : (
                 <Pressable
-                  onPress={() => {
-                    fermer();
-                    ouvrirReglages('codex');
-                  }}
+                  onPress={() => setConnexionGithub(true)}
                   style={[styles.boutonSecondaire, { borderColor: c.accent, alignSelf: 'stretch' }]}
                 >
                   <Text style={{ color: c.accentTexte, fontWeight: '700', lineHeight: 20 }}>
-                    Ajoute ton jeton GitHub (Réglages IA → Codex) pour voir tes dépôts, même privés, et envoyer tes changements →
+                    🐙 Se connecter avec GitHub pour voir tes dépôts, même privés, et envoyer tes changements →
                   </Text>
                 </Pressable>
               )}
+              <ConnexionGithub
+                visible={connexionGithub}
+                couleurs={c}
+                onFermer={() => setConnexionGithub(false)}
+                onConnecte={async (nouveau) => {
+                  await enregistrer({ ...reglages, jetonGithub: nouveau });
+                  setConnexionGithub(false);
+                }}
+                onJetonManuel={() => {
+                  setConnexionGithub(false);
+                  fermer();
+                  ouvrirReglages('codex');
+                }}
+              />
 
               <Text style={[styles.etiquette, { color: c.texteDoux }]}>ADRESSE DU DÉPÔT GITHUB</Text>
               <TextInput
