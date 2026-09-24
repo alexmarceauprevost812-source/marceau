@@ -77,6 +77,12 @@ export function EcranReveil({ visible, couleurs: c, onFermer }: Props) {
   };
 
   const supprimer = async (r: Reveil) => {
+    // Pas de suppression pendant qu'on (dés)active ce réveil : sinon la notification en cours de
+    // programmation pourrait rester sans aucune ligne pour la contrôler.
+    if (enCours.current.has(r.id)) {
+      Alert.alert('Un instant', 'Le réveil est en train d’être activé ou désactivé. Réessaie dans une seconde.');
+      return;
+    }
     // On n'enlève la ligne que si la notification a bien été annulée : sinon elle continuerait
     // de sonner sans aucun contrôle possible.
     if (!(await annulerRappel(r.notifId))) {
