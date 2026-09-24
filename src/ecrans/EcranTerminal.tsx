@@ -1,23 +1,38 @@
 // SPDX-License-Identifier: MIT
 import { useCallback, useEffect, useState } from 'react';
-import { AppState, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { AppState, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Terminal, type InfosTerminal } from '../../modules/marceau-terminal';
-import { PanneauLinux } from '../terminal/Panneaux';
+import { PanneauLinux, PanneauTelephone, PanneauTermux } from '../terminal/Panneaux';
 import type { Couleurs } from '../theme';
 import { Entete } from '../ui/Entete';
 
-/** Terminal : un seul terminal, le Linux intégré (PRoot). */
+type Onglet = 'linux' | 'termux' | 'telephone';
+const ONGLETS: { cle: Onglet; libelle: string }[] = [
+  { cle: 'linux', libelle: '🐧 Linux' },
+  { cle: 'termux', libelle: '📦 Termux' },
+  { cle: 'telephone', libelle: '📱 Téléphone' },
+];
+
+/** Terminal : Linux intégré (Alpine/PRoot), Termux (app installée), et le shell du téléphone. */
 export function EcranTerminal({ couleurs: c }: { couleurs: Couleurs }) {
   const [infos, setInfos] = useState<InfosTerminal | null>(() => Terminal?.infos() ?? null);
+  const [onglet, setOnglet] = useState<Onglet>('linux');
+  // Un onglet visité reste monté (sa session continue en arrière-plan).
+  const [visites, setVisites] = useState<Set<Onglet>>(() => new Set<Onglet>(['linux']));
 
   const rafraichir = useCallback(() => setInfos(Terminal?.infos() ?? null), []);
 
-  // Rafraîchir en revenant dans l'application (installation terminée, etc.).
+  // Rafraîchir en revenant dans l'application (Termux installé, installation Linux terminée, etc.).
   useEffect(() => {
     const abonnement = AppState.addEventListener('change', (etat) => etat === 'active' && rafraichir());
     return () => abonnement.remove();
   }, [rafraichir]);
+
+  const choisir = (cle: Onglet) => {
+    setOnglet(cle);
+    setVisites((v) => (v.has(cle) ? v : new Set(v).add(cle)));
+  };
 
   if (!Terminal || !infos) {
     return (
@@ -33,16 +48,39 @@ export function EcranTerminal({ couleurs: c }: { couleurs: Couleurs }) {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Entete
-        couleurs={c}
-        titre="Terminal"
-        droite={
-          <Text numberOfLines={1} style={styles.badge}>
-            [ <Text style={{ color: c.accentTexte }}>Alpine</Text> <Text style={{ color: c.texte }}>Linux</Text> ]
-          </Text>
-        }
-      />
-      <PanneauLinux couleurs={c} infos={infos} rafraichir={rafraichir} />
+      <Entete couleurs={c} titre="Terminal" />
+      <View style={styles.onglets} accessibilityRole="tablist">
+        {ONGLETS.map(({ cle, libelle }) => {
+          const actif = onglet === cle;
+          return (
+            <Pressable
+              key={cle}
+              onPress={() => choisir(cle)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: actif }}
+              style={[styles.onglet, { borderColor: c.bordure }, actif && { backgroundColor: c.accent, borderColor: c.accent }]}
+            >
+              <Text style={{ color: actif ? c.surAccent : c.texte, fontWeight: '700', fontSize: 13 }}>{libelle}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {/* Chaque onglet visité reste monté (caché) pour garder sa session. */}
+      {visites.has('linux') && (
+        <View style={[styles.flex, onglet !== 'linux' && styles.cache]}>
+          <PanneauLinux couleurs={c} infos={infos} rafraichir={rafraichir} />
+        </View>
+      )}
+      {visites.has('termux') && (
+        <View style={[styles.flex, onglet !== 'termux' && styles.cache]}>
+          <PanneauTermux couleurs={c} infos={infos} rafraichir={rafraichir} />
+        </View>
+      )}
+      {visites.has('telephone') && (
+        <View style={[styles.flex, onglet !== 'telephone' && styles.cache]}>
+          <PanneauTelephone couleurs={c} infos={infos} rafraichir={rafraichir} />
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -50,5 +88,7 @@ export function EcranTerminal({ couleurs: c }: { couleurs: Couleurs }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   absent: { fontSize: 15, lineHeight: 22, paddingHorizontal: 20 },
-  badge: { fontSize: 14, fontWeight: '800', fontFamily: 'monospace' },
+  onglets: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingBottom: 10 },
+  onglet: { flex: 1, borderWidth: 1, borderRadius: 999, paddingVertical: 7, alignItems: 'center' },
+  cache: { display: 'none' },
 });
