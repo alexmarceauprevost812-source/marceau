@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
 /**
  * Emballe xterm.js (le moteur d'affichage du Terminal) dans un fichier TypeScript,
  * pour que le Terminal fonctionne sans internet. Lancé automatiquement après

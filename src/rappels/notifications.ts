@@ -45,7 +45,74 @@ export async function programmerRappel(titre: string, texte: string, date: Date)
   });
 }
 
-export async function annulerRappel(id: string | undefined) {
-  if (!id || Platform.OS === 'web') return;
-  await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+/** Annule une notification programmée. Renvoie true si c'est réglé (rien à annuler = true aussi),
+ *  false si l'annulation a échoué (l'appelant peut alors garder l'état actuel). */
+export async function annulerRappel(id: string | undefined): Promise<boolean> {
+  if (!id || Platform.OS === 'web') return true;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const CANAL_REVEIL = 'reveil';
+let canalReveilPret = false;
+
+/**
+ * Prépare le canal « Réveil » (une seule fois) et vérifie la permission des notifications
+ * À CHAQUE appel : si l'utilisateur l'a retirée dans les réglages du téléphone puis revient,
+ * on ne doit pas croire, à partir d'un cache, que le réveil pourra sonner.
+ */
+async function preparerReveil(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  try {
+    if (Platform.OS === 'android' && !canalReveilPret) {
+      await Notifications.setNotificationChannelAsync(CANAL_REVEIL, {
+        name: 'Réveil',
+        importance: Notifications.AndroidImportance.MAX,
+        sound: 'default',
+        vibrationPattern: [0, 500, 500, 500, 500, 500],
+        enableVibrate: true,
+      });
+      canalReveilPret = true;
+    }
+    const actuel = await Notifications.getPermissionsAsync();
+    if (actuel.granted) return true;
+    const demande = await Notifications.requestPermissionsAsync();
+    return demande.granted;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Programme un réveil qui sonne CHAQUE JOUR à l'heure donnée (notification + sonnerie).
+ * Renvoie l'identifiant de la notification, ou null si la permission est refusée.
+ */
+export async function programmerReveil(heure: number, minute: number, titre = '⏰ Réveil'): Promise<string | null> {
+  if (!(await preparerReveil())) return null;
+  return Notifications.scheduleNotificationAsync({
+    content: { title: titre, body: "C'est l'heure de te réveiller !", sound: true, data: { marceau: 'reveil' } },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: heure, minute, channelId: CANAL_REVEIL },
+  });
+}
+
+/**
+ * Annule les réveils programmés qui n'ont plus de ligne dans l'écran Réveil (appli fermée avant
+ * l'enregistrement, stockage plein…) : sinon ils sonneraient chaque jour sans moyen de les arrêter.
+ */
+export async function nettoyerReveilsOrphelins(connus: Set<string>): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const programmes = await Notifications.getAllScheduledNotificationsAsync();
+    for (const n of programmes) {
+      if (n.content.data?.marceau === 'reveil' && !connus.has(n.identifier)) {
+        await Notifications.cancelScheduledNotificationAsync(n.identifier).catch(() => {});
+      }
+    }
+  } catch {
+    // on réessaiera au prochain lancement
+  }
 }

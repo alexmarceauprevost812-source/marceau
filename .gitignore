@@ -45,3 +45,7 @@ src/terminal/xtermBundle.ts
 modules/marceau-terminal/android/src/main/jniLibs/
 modules/marceau-terminal/android/build/
 modules/marceau-terminal/android/.cxx/
+
+# Généré : liste des licences, compilation de PRoot
+src/licences/generees.ts
+/build/

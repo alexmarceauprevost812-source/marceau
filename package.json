@@ -38,9 +38,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/xterm-bundle.js",
-    "preparer-linux": "node scripts/preparer-linux.js",
-    "eas-build-post-install": "node scripts/preparer-linux.js"
+    "postinstall": "node scripts/xterm-bundle.js && node scripts/licences.js",
+    "preparer-linux": "bash scripts/construire-linux.sh",
+    "eas-build-post-install": "bash scripts/construire-linux.sh",
+    "sources-linux": "bash scripts/construire-linux.sh --sources"
   },
   "private": true
 }

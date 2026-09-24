@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo';
 

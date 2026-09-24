@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -175,7 +176,7 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
       <Info
         couleurs={c}
         titre="Linux n'est pas inclus dans cet APK"
-        texte="Le moteur PRoot n'a pas pu être téléchargé pendant la construction de l'APK. Relance la construction (Actions → Construire l'APK Android) : l'onglet Linux fonctionnera dans la prochaine version."
+        texte="Le moteur PRoot n'a pas pu être compilé pendant la construction de l'APK. Installe la prochaine version : l'onglet Linux y fonctionnera."
       />
     );
   }

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * Pseudo-terminal (PTY) pour le Terminal de Marceau.
  *
