@@ -37,6 +37,8 @@ export default function App() {
   const [bureauOuvert, setBureauOuvert] = useState(false);
   // Écran d'ouverture (2 s) au lancement de l'application.
   const [ouvert, setOuvert] = useState(false);
+  // Callback mémorisé : sinon un nouveau rendu de App relancerait l'animation d'ouverture.
+  const finOuverture = useCallback(() => setOuvert(true), []);
   // Le Terminal n'est chargé qu'à sa première ouverture.
   const [terminalOuvert, setTerminalOuvert] = useState(false);
   useEffect(() => {
@@ -107,7 +109,7 @@ export default function App() {
           <EcranCarte visible={carteOuverte} couleurs={couleurs} onFermer={() => setCarteOuverte(false)} />
           <Verrou couleurs={couleurs} />
           <Reactions couleurs={couleurs} />
-          {!ouvert && <Ouverture onFini={() => setOuvert(true)} />}
+          {!ouvert && <Ouverture onFini={finOuverture} />}
           <StatusBar style={nuit ? 'light' : 'dark'} />
         </MenuProvider>
       </ReglagesIAProvider>
