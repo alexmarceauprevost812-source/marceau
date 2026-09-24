@@ -16,6 +16,8 @@ export const IMAGES = {
   avatarNeutre: require('../assets/images/avatar-neutre.webp'),
   /** Avatar masqué : signe rock. */
   avatarRock: require('../assets/images/avatar-rock.webp'),
+  /** Grande photo de Marceau masqué (signe rock), pour l'écran d'ouverture. */
+  ouverture: require('../assets/images/ouverture.png'),
 } as const;
 
 /** Les trois poses de l'avatar, en petit format carré (tête + main). */
