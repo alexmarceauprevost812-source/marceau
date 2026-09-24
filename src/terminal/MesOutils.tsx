@@ -18,16 +18,32 @@ type Props = {
 /** Une commande de ta bibliothèque : un nom à toucher et la ligne de commande qu'il lance. */
 type Commande = { id: string; nom: string; commande: string };
 
+/** Un pack d'outils à installer d'un toucher (thème → paquets Alpine). */
+type Pack = { nom: string; icone: string; paquets: string[] };
+
+// On n'inclut que des paquets présents dans Alpine (le reste, 28 000+, s'installe à la demande
+// avec « apk add »). Un toucher fait « apk update » puis installe le pack.
+const PACKS: Pack[] = [
+  { nom: 'Réseau', icone: '🌐', paquets: ['nmap', 'tcpdump', 'netcat-openbsd', 'bind-tools', 'curl', 'wget', 'mtr', 'openssh'] },
+  { nom: 'Wi-Fi et mots de passe', icone: '📶', paquets: ['aircrack-ng', 'wireless-tools', 'john', 'hydra'] },
+  { nom: 'Web', icone: '🕸️', paquets: ['curl', 'wget', 'nikto', 'whatweb'] },
+  { nom: 'Programmation', icone: '💻', paquets: ['python3', 'py3-pip', 'nodejs', 'npm', 'git', 'gcc', 'make'] },
+  { nom: 'Fichiers et système', icone: '🗂️', paquets: ['nano', 'vim', 'htop', 'tree', 'jq', 'file', 'unzip'] },
+];
+
+/** Commande d'installation d'un pack : met à jour, installe, et dit clairement si ça a réussi. */
+function commandeInstall(paquets: string[]): string {
+  const liste = paquets.join(' ');
+  return (
+    `apk update && apk add ${liste} ` +
+    '&& { echo; echo "Installe. Touche un outil dans la liste ou tape son nom. Sers-toi de ces outils ' +
+    'uniquement sur TES appareils et reseaux, ou avec autorisation ecrite."; } ' +
+    '|| { echo; echo "Echec. Verifie ta connexion Internet et l espace disque, puis reessaie."; }'
+  );
+}
+
 const COMMANDES_DE_DEPART: Commande[] = [
   { id: 'maj', nom: 'Mettre à jour Linux', commande: 'apk update && apk upgrade' },
-  {
-    id: 'securite',
-    nom: 'Installer les outils de sécurité de base',
-    // apk update d'abord (sinon apk add échoue). Le message final dépend du vrai résultat :
-    // en cas d'échec (hors ligne, dépôt indisponible, disque plein), on ne dit pas « réussi ».
-    commande:
-      'apk update && apk add nmap tcpdump netcat-openbsd bind-tools curl wget python3 py3-pip git && { echo; echo "Termine. Tape le nom d un outil (ex. nmap) pour l utiliser. Sers-toi de ces outils uniquement sur TES appareils et reseaux, ou avec autorisation ecrite."; } || { echo; echo "Echec de l installation. Verifie ta connexion Internet et l espace disque, puis reessaie."; }',
-  },
   { id: 'chercher', nom: 'Chercher un outil (change le mot)', commande: 'apk search nmap' },
   { id: 'disque', nom: 'Espace disque', commande: 'df -h / && du -sh ~/* 2>/dev/null | sort -h | tail -5' },
   { id: 'telephone', nom: 'Mes fichiers du téléphone', commande: 'ls -la /telephone' },
@@ -84,6 +100,34 @@ export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
         </View>
 
         <ScrollView contentContainerStyle={styles.corps} keyboardShouldPersistTaps="handled">
+          <Text style={[styles.section, { color: c.texte }]}>📦 Packs d’outils</Text>
+          <Text style={[styles.intro, { color: c.texteDoux }]}>
+            Alpine a plus de 28 000 outils : impossible de tous les mettre d’avance. Touche un thème pour installer
+            ses outils d’un coup. Le reste s’installe à la demande avec « apk add ».
+          </Text>
+          {PACKS.map((pack) => (
+            <Pressable
+              key={pack.nom}
+              onPress={() => onLancer(commandeInstall(pack.paquets))}
+              accessibilityRole="button"
+              accessibilityLabel={`Installer les outils : ${pack.nom}`}
+              style={({ pressed }) => [
+                styles.ligne,
+                { backgroundColor: c.carte, borderColor: c.bordure, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <View style={styles.flex}>
+                <Text style={[styles.nom, { color: c.texte }]}>
+                  {pack.icone} {pack.nom}
+                </Text>
+                <Text numberOfLines={1} style={[styles.detail, { color: c.accentTexte }]}>
+                  {pack.paquets.join(' ')}
+                </Text>
+              </View>
+              <Text style={[styles.lancer, { color: c.texteDoux }]}>⬇</Text>
+            </Pressable>
+          ))}
+
           <Text style={[styles.section, { color: c.texte }]}>⚡ Mes commandes</Text>
           <Text style={[styles.intro, { color: c.texteDoux }]}>
             Touche un bouton pour lancer sa commande dans le terminal. Appui long pour le supprimer.
