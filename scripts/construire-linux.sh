@@ -121,6 +121,9 @@ construire_abi() { # abi
   local abi="$1" cible="${CIBLES[$1]}"
   local cc="$OUTILS/${cible}${API}-clang"
   local dep="$TRAVAIL/$abi/dep" src="$TRAVAIL/$abi/src"
+  # On efface d'abord la sortie de cet ABI : si le téléchargement ou la compilation échoue,
+  # aucun ancien binaire PRoot périmé ne subsiste dans l'APK (l'onglet Linux sera juste indisponible).
+  rm -rf "$JNILIBS/$abi"
   rm -rf "$TRAVAIL/$abi"
   mkdir -p "$dep/lib" "$dep/include/sys" "$src"
   [ -x "$cc" ] || { avertir "$abi : compilateur introuvable ($cc)"; return 1; }
@@ -231,7 +234,12 @@ if ! NDK="$(trouver_ndk)"; then
   avertir "NDK Android introuvable : l'onglet Linux du Terminal sera indisponible dans cet APK."
   exit 0
 fi
-OUTILS="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+# Le NDK range ses exécutables selon le système hôte (linux-x86_64, darwin-x86_64…).
+case "$(uname -s)" in
+  Darwin) HOTE_NDK=darwin-x86_64 ;;
+  *) HOTE_NDK=linux-x86_64 ;;
+esac
+OUTILS="$NDK/toolchains/llvm/prebuilt/$HOTE_NDK/bin"
 info "NDK : $NDK"
 command -v python3 >/dev/null || { avertir "python3 requis pour compiler talloc"; exit 0; }
 

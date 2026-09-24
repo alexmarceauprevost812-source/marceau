@@ -52,7 +52,12 @@ export function EcranReveil({ visible, couleurs: c, onFermer }: Props) {
     enCours.current.add(id);
     try {
       if (r.actif) {
-        await annulerRappel(r.notifId);
+        // Si l'annulation échoue, on garde le réveil actif (avec son identifiant) : sinon il
+        // continuerait de sonner sans qu'on puisse le contrôler depuis l'écran.
+        if (!(await annulerRappel(r.notifId))) {
+          Alert.alert('Désactivation impossible', 'Le réveil n’a pas pu être désactivé. Réessaie.');
+          return;
+        }
         setReveils((l) => l.map((x) => (x.id === id ? { ...x, actif: false, notifId: undefined } : x)));
       } else {
         const notifId = await programmer(r);
@@ -71,8 +76,13 @@ export function EcranReveil({ visible, couleurs: c, onFermer }: Props) {
     }
   };
 
-  const supprimer = (r: Reveil) => {
-    annulerRappel(r.notifId);
+  const supprimer = async (r: Reveil) => {
+    // On n'enlève la ligne que si la notification a bien été annulée : sinon elle continuerait
+    // de sonner sans aucun contrôle possible.
+    if (!(await annulerRappel(r.notifId))) {
+      Alert.alert('Suppression impossible', 'Le réveil n’a pas pu être supprimé. Réessaie.');
+      return;
+    }
     setReveils((l) => l.filter((x) => x.id !== r.id));
   };
 

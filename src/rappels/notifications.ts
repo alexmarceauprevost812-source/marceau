@@ -45,9 +45,16 @@ export async function programmerRappel(titre: string, texte: string, date: Date)
   });
 }
 
-export async function annulerRappel(id: string | undefined) {
-  if (!id || Platform.OS === 'web') return;
-  await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+/** Annule une notification programmée. Renvoie true si c'est réglé (rien à annuler = true aussi),
+ *  false si l'annulation a échoué (l'appelant peut alors garder l'état actuel). */
+export async function annulerRappel(id: string | undefined): Promise<boolean> {
+  if (!id || Platform.OS === 'web') return true;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(id);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const CANAL_REVEIL = 'reveil';
