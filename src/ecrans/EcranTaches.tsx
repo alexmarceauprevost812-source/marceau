@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { AssistantIA } from '../components/AssistantIA';
+import { EcranChat } from './EcranChat';
 import { ElementTache } from '../components/ElementTache';
 import { useTaches } from '../hooks/useTaches';
 import { BoutonBureau, BoutonMenu } from '../navigation/Menu';
@@ -33,6 +34,8 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
   const [saisie, setSaisie] = useState('');
   const [filtre, setFiltre] = useState<Filtre>('toutes');
   const [assistantOuvert, setAssistantOuvert] = useState(false);
+  // Deux façons d'avancer le projet : des tâches, ou des conversations avec l'IA.
+  const [vue, setVue] = useState<'taches' | 'discussions'>('taches');
 
   const visibles = useMemo(() => {
     if (filtre === 'actives') return taches.filter((t) => !t.terminee);
@@ -78,6 +81,35 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
           </Text>
         </View>
 
+        <View style={styles.onglets}>
+          {(['taches', 'discussions'] as const).map((v) => {
+            const actif = vue === v;
+            return (
+              <Pressable
+                key={v}
+                onPress={() => setVue(v)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: actif }}
+                style={[styles.onglet, { borderColor: couleurs.bordure }, actif && { backgroundColor: couleurs.accent, borderColor: couleurs.accent }]}
+              >
+                <Text style={{ color: actif ? couleurs.surAccent : couleurs.texte, fontWeight: '700' }}>
+                  {v === 'taches' ? '✅ Tâches' : '💬 Discussions'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {vue === 'discussions' ? (
+          <EcranChat
+            couleurs={couleurs}
+            embarque
+            cleStockage="marceau:projet-conversations"
+            titreListe="Discussions du projet"
+            systemeSup="Tu aides à faire avancer un projet personnel. Sois concret : propose les prochaines étapes, et quand c'est utile, une courte liste de tâches à faire."
+          />
+        ) : (
+          <>
         <View style={styles.formulaire}>
           <TextInput
             value={saisie}
@@ -161,6 +193,8 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
             </Text>
           </Pressable>
         )}
+          </>
+        )}
       </KeyboardAvoidingView>
       <ChoixRappel
         tache={tacheRappel}
@@ -204,6 +238,8 @@ const styles = StyleSheet.create({
   },
   bouton: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   boutonTexte: { fontSize: 26, fontWeight: '600', marginTop: -2 },
+  onglets: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingBottom: 6 },
+  onglet: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
   filtres: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingVertical: 16 },
   puce: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1 },
   chargement: { marginTop: 40 },
