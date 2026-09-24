@@ -90,6 +90,8 @@ class MarceauTerminalModule : Module() {
     }
 
     // ---------- Option 4 : Linux ----------
+    Function("outilsLinux") { Linux.outilsInstalles(ctx) }
+
     AsyncFunction("installerLinux") { promise: Promise ->
       thread(name = "installation-linux") {
         try {

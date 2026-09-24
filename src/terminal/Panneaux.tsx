@@ -19,6 +19,7 @@ import { Terminal, type InfosTerminal, type OptionsSsh } from '../../modules/mar
 import type { Couleurs } from '../theme';
 import { AideLinux } from './AideLinux';
 import { BarreTouches } from './BarreTouches';
+import { MesOutils } from './MesOutils';
 import { VueTerminal, type PoigneeTerminal, type Theme } from './VueTerminal';
 
 /**
@@ -218,14 +219,26 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
 /** Terminal Linux prêt, avec la barre d'aide (commandes et catalogue). */
 function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
   const [aide, setAide] = useState(false);
+  const [outils, setOutils] = useState(false);
   return (
     <View style={styles.flex}>
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
+        <Bouton couleurs={c} libelle="🧰 Mes outils" compact secondaire onPress={() => setOutils(true)} />
         <Bouton couleurs={c} libelle="📖 Commandes" compact secondaire onPress={() => setAide(true)} />
-        <Bouton couleurs={c} libelle="🧰 Outils Kali" compact secondaire onPress={() => Linking.openURL(LIEN_KALI)} />
+        <Bouton couleurs={c} libelle="🐉 Kali" compact secondaire onPress={() => Linking.openURL(LIEN_KALI)} />
       </View>
       <SessionPty couleurs={c} type="linux" />
       <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
+      <MesOutils
+        visible={outils}
+        couleurs={c}
+        onFermer={() => setOutils(false)}
+        onLancer={(o) => {
+          setOutils(false);
+          // Même session que SessionPty (id « linux ») : on tape le nom de l'outil puis Entrée.
+          Terminal?.ecrire('linux', `${o}\r`).catch(() => {});
+        }}
+      />
     </View>
   );
 }
