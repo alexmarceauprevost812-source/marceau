@@ -32,7 +32,14 @@ export function EcranReveil({ visible, couleurs: c, onFermer }: Props) {
 
   const programmer = async (r: Reveil): Promise<string | null> => {
     const [hh, mm] = r.heure.split(':').map(Number);
-    const id = await programmerReveil(hh, mm);
+    let id: string | null;
+    try {
+      id = await programmerReveil(hh, mm);
+    } catch {
+      // Refus du téléphone lui-même (trop de notifications programmées, etc.).
+      Alert.alert('Réveil impossible', 'Le téléphone a refusé de programmer ce réveil. Supprime d’anciens réveils ou rappels, puis réessaie.');
+      return null;
+    }
     if (!id) {
       Alert.alert(
         'Notifications bloquées',
