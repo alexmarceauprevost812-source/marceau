@@ -16,15 +16,21 @@ import * as SecureStore from 'expo-secure-store';
 
 import { Terminal, type InfosTerminal, type OptionsSsh } from '../../modules/marceau-terminal';
 import type { Couleurs } from '../theme';
+import { AideLinux } from './AideLinux';
 import { BarreTouches } from './BarreTouches';
 import { VueTerminal, type PoigneeTerminal, type Theme } from './VueTerminal';
 
-/** Terminal : fond noir, réponses en vert lime, ce que tu tapes en blanc. */
+/**
+ * Terminal : fond bien noir, réponses (sorties) en blanc, ce que tu tapes en vert lime,
+ * le nom de la commande (1er mot) en jaune or, et les messages d'erreur en rouge.
+ */
 export const THEME_TERMINAL: Theme = {
   fond: '#000000',
-  texte: '#A6FF00',
-  saisie: '#FFFFFF',
-  curseur: '#FFFFFF',
+  texte: '#FFFFFF',
+  saisie: '#A6FF00',
+  commande: '#FFC400',
+  erreur: '#FF4D4D',
+  curseur: '#A6FF00',
   selection: 'rgba(166,255,0,0.3)',
 };
 
@@ -205,15 +211,20 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
     );
   }
 
+  return <LinuxPret couleurs={c} />;
+}
+
+/** Terminal Linux prêt, avec la barre d'aide (commandes et catalogue). */
+function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
+  const [aide, setAide] = useState(false);
   return (
     <View style={styles.flex}>
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
-        <Text style={[styles.petit, { color: c.texteDoux, flex: 1 }]} numberOfLines={2}>
-          Catalogue d'outils Kali (doc officielle) : lis ce que fait chaque commande avant de la lancer.
-        </Text>
-        <Bouton couleurs={c} libelle="📖 Outils" compact secondaire onPress={() => Linking.openURL(LIEN_KALI)} />
+        <Bouton couleurs={c} libelle="📖 Commandes" compact secondaire onPress={() => setAide(true)} />
+        <Bouton couleurs={c} libelle="🧰 Outils Kali" compact secondaire onPress={() => Linking.openURL(LIEN_KALI)} />
       </View>
       <SessionPty couleurs={c} type="linux" />
+      <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
     </View>
   );
 }

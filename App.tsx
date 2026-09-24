@@ -19,6 +19,7 @@ import { MenuLateral, MenuProvider, type Section } from './src/navigation/Menu';
 import { Verrou } from './src/securite/Verrou';
 import { useCouleurs, useModeNuit } from './src/theme';
 import { Reactions } from './src/ui/Avatar';
+import { Ouverture } from './src/ui/Ouverture';
 
 type Ecran = Exclude<Section, 'agenda' | 'carte' | 'parametres' | 'preferences'>;
 
@@ -34,6 +35,10 @@ export default function App() {
   const [reglagesOuverts, setReglagesOuverts] = useState<Espace | null>(null);
   const ouvrirReglages = useCallback((espace: Espace = 'chat') => setReglagesOuverts(espace), []);
   const [bureauOuvert, setBureauOuvert] = useState(false);
+  // Écran d'ouverture (2 s) au lancement de l'application.
+  const [ouvert, setOuvert] = useState(false);
+  // Callback mémorisé : sinon un nouveau rendu de App relancerait l'animation d'ouverture.
+  const finOuverture = useCallback(() => setOuvert(true), []);
   // Le Terminal n'est chargé qu'à sa première ouverture.
   const [terminalOuvert, setTerminalOuvert] = useState(false);
   useEffect(() => {
@@ -102,8 +107,12 @@ export default function App() {
           />
           <EcranAgenda visible={agendaOuvert} couleurs={couleurs} onFermer={() => setAgendaOuvert(false)} />
           <EcranCarte visible={carteOuverte} couleurs={couleurs} onFermer={() => setCarteOuverte(false)} />
-          <Verrou couleurs={couleurs} />
+          {/* Le verrou reste monté en permanence (sécurité) : il ne faut jamais laisser voir le Chat
+              sans lui. L'écran d'ouverture est lui-même un Modal rendu par-dessus, donc l'animation
+              s'affiche au premier plan sans démonter le verrou. */}
+          <Verrou couleurs={couleurs} demarrer={ouvert} />
           <Reactions couleurs={couleurs} />
+          {!ouvert && <Ouverture onFini={finOuverture} />}
           <StatusBar style={nuit ? 'light' : 'dark'} />
         </MenuProvider>
       </ReglagesIAProvider>
