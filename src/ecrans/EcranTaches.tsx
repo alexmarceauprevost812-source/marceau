@@ -18,9 +18,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AssistantIA } from '../components/AssistantIA';
 import { EcranChat } from './EcranChat';
 import { ElementTache } from '../components/ElementTache';
-import { nouvelId, usePersistant } from '../hooks/usePersistant';
+import { effacerPersistant, lirePersistant, nouvelId, usePersistant } from '../hooks/usePersistant';
 import { useTaches } from '../hooks/useTaches';
+import { supprimerPieces } from '../ia/pieces';
 import { annulerRappel } from '../rappels/notifications';
+import type { Conversation } from '../types';
 import { BoutonBureau, BoutonMenu } from '../navigation/Menu';
 import type { Couleurs } from '../theme';
 import type { Filtre, Tache } from '../types';
@@ -89,12 +91,17 @@ export function EcranTaches({ couleurs }: { couleurs: Couleurs }) {
         text: 'Supprimer',
         style: 'destructive',
         onPress: async () => {
-          // Annule les rappels des tâches du projet supprimé (sinon ils sonneraient sans être visibles).
+          // Nettoie tout ce qui appartient au projet supprimé.
           try {
+            // Tâches : annuler leurs rappels, puis effacer leur clé.
             const brut = await AsyncStorage.getItem(cleTaches(p.id));
             const taches: Tache[] = brut ? JSON.parse(brut) : [];
             await Promise.all(taches.map((t) => annulerRappel(t.rappel?.id)));
             await AsyncStorage.removeItem(cleTaches(p.id));
+            // Discussions : supprimer les pièces jointes (images, PDF) puis leur stockage.
+            const convs = (await lirePersistant<Conversation[]>(cleConversations(p.id))) ?? [];
+            supprimerPieces(convs.flatMap((c) => c.messages.flatMap((m) => m.pieces ?? [])));
+            await effacerPersistant(cleConversations(p.id));
           } catch {
             // le projet est retiré quand même
           }
