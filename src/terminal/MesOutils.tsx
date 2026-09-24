@@ -23,10 +23,10 @@ const COMMANDES_DE_DEPART: Commande[] = [
   {
     id: 'securite',
     nom: 'Installer les outils de sécurité de base',
-    // apk update d'abord (sinon apk add échoue). Ces paquets existent dans Alpine ; ceux qui
-    // manqueraient sont simplement ignorés (|| true) pour ne pas bloquer les autres.
+    // apk update d'abord (sinon apk add échoue). Le message final dépend du vrai résultat :
+    // en cas d'échec (hors ligne, dépôt indisponible, disque plein), on ne dit pas « réussi ».
     commande:
-      'apk update && apk add nmap tcpdump netcat-openbsd bind-tools curl wget python3 py3-pip git || true; echo; echo "Termine. Tape le nom d un outil (ex. nmap) pour l utiliser. Sers-toi de ces outils uniquement sur TES appareils et reseaux, ou avec autorisation ecrite."',
+      'apk update && apk add nmap tcpdump netcat-openbsd bind-tools curl wget python3 py3-pip git && { echo; echo "Termine. Tape le nom d un outil (ex. nmap) pour l utiliser. Sers-toi de ces outils uniquement sur TES appareils et reseaux, ou avec autorisation ecrite."; } || { echo; echo "Echec de l installation. Verifie ta connexion Internet et l espace disque, puis reessaie."; }',
   },
   { id: 'chercher', nom: 'Chercher un outil (change le mot)', commande: 'apk search nmap' },
   { id: 'disque', nom: 'Espace disque', commande: 'df -h / && du -sh ~/* 2>/dev/null | sort -h | tail -5' },
