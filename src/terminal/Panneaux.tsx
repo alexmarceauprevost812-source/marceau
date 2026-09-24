@@ -638,6 +638,7 @@ const styles = StyleSheet.create({
   ligneInter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   barreAction: {
     flexDirection: 'row',
+    flexWrap: 'wrap', // petits écrans / grande police : les boutons passent à la ligne
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 12,

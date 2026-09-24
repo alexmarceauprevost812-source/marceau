@@ -81,7 +81,15 @@ export const CarteChangement = memo(function CarteChangement({
 
       {ouvert &&
         (supprime ? (
-          <Text style={[styles.info, { color: c.code.retrait }]}>Fichier supprimé ({retraits} lignes retirées).</Text>
+          // Ce qui a été retiré reste visible, pour décider d'annuler ou non.
+          <View>
+            <Text style={[styles.info, { color: c.code.retrait }]}>Fichier supprimé ({retraits} lignes retirées) :</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <Text selectable style={[styles.code, { color: c.code.texte, paddingTop: 0 }]}>
+                <CodeColore code={ch.ancien ?? ''} langage="" chemin={ch.chemin} couleurs={c} />
+              </Text>
+            </ScrollView>
+          </View>
         ) : vue === 'changements' && !cree ? (
           <VueDiff ancien={ch.ancien ?? ''} nouveau={ch.nouveau ?? ''} couleurs={c} />
         ) : (
