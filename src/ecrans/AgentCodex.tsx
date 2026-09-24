@@ -1,13 +1,14 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { lancerAgent, type EtapeAgent, type FichiersAgent, type ResultatAgent } from '../ia/agentCodex';
+import { lancerAgent, type DirectAgent, type EtapeAgent, type FichiersAgent, type ResultatAgent } from '../ia/agentCodex';
 import type { MessageIA } from '../ia/client';
 import { FOURNISSEURS, manqueCle } from '../ia/fournisseurs';
 import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 import type { Fichier, Projet } from '../types';
 import { CarteChangement, totalChangements, type Changement } from '../ui/CarteChangement';
+import { EcritureDirecte } from '../ui/EcritureDirecte';
 import { Markdown } from '../ui/Markdown';
 
 /** Consigne de l'agent : l'arborescence seulement, Claude lit lui-même les fichiers utiles. */
@@ -110,8 +111,15 @@ export function AgentCodex({
   const [avant, setAvant] = useState<Pick<Projet, 'fichiers' | 'supprimes'> | null>(null);
   // Fichiers changés au dernier passage de l'agent (code en couleur, lignes ajoutées / retirées).
   const [changements, setChangements] = useState<Changement[] | null>(null);
+  // Ce que Claude écrit en ce moment (affiché en direct, rafraîchi au plus toutes les 50 ms).
+  const [direct, setDirect] = useState<DirectAgent | null>(null);
+  const dernierDirect = useRef<DirectAgent | null>(null);
+  const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controleur = useRef<AbortController | null>(null);
   const defilement = useRef<ScrollView>(null);
+  useEffect(() => () => {
+    if (minuteur.current) clearTimeout(minuteur.current);
+  }, []);
   const messages = p.messagesAgent ?? [];
   const occupe = etapes !== null;
   const total = changements ? totalChangements(changements) : null;
@@ -139,6 +147,22 @@ export function AgentCodex({
     );
   }
 
+  const recevoirDirect = (d: DirectAgent | null) => {
+    dernierDirect.current = d;
+    if (d === null) {
+      if (minuteur.current) clearTimeout(minuteur.current);
+      minuteur.current = null;
+      setDirect(null);
+      return;
+    }
+    if (minuteur.current) return;
+    minuteur.current = setTimeout(() => {
+      minuteur.current = null;
+      setDirect(dernierDirect.current);
+      requestAnimationFrame(() => defilement.current?.scrollToEnd({ animated: false }));
+    }, 50);
+  };
+
   const envoyer = async () => {
     const demande = saisie.trim();
     if (!demande || occupe) return;
@@ -161,6 +185,7 @@ export function AgentCodex({
           setEtapes((l) => [...(l ?? []), e]);
           requestAnimationFrame(() => defilement.current?.scrollToEnd({ animated: true }));
         },
+        onDirect: recevoirDirect,
       });
       const changement = r.crees.length + r.modifies.length + r.supprimes.length > 0;
       const reponse = [r.texte, resumeChangements(r), r.avertissement ? `⚠️ ${r.avertissement}` : '']
@@ -180,6 +205,7 @@ export function AgentCodex({
       onModifier((proj) => ({ ...proj, messagesAgent: [...historique, { role: 'assistant', content: texte }] }));
     } finally {
       controleur.current = null;
+      recevoirDirect(null);
       setEtapes(null);
       requestAnimationFrame(() => defilement.current?.scrollToEnd({ animated: true }));
     }
@@ -241,9 +267,10 @@ export function AgentCodex({
                 {ICONES[e.type]} {LIBELLES[e.type]} {e.detail}
               </Text>
             ))}
+            {direct && <EcritureDirecte direct={direct} couleurs={c} />}
             <View style={styles.enCours}>
               <ActivityIndicator color={c.accentTexte} />
-              <Text style={{ color: c.texteDoux }}>Claude travaille…</Text>
+              <Text style={{ color: c.texteDoux }}>{direct && direct.type !== 'texte' ? 'Claude écrit le code…' : 'Claude travaille…'}</Text>
             </View>
           </View>
         )}
