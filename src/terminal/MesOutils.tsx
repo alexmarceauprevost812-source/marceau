@@ -24,24 +24,29 @@ const LIEN_CATALOGUE = 'https://pkgs.alpinelinux.org/packages';
 /** Un pack d'outils à installer d'un toucher (thème → paquets Alpine). */
 type Pack = { nom: string; icone: string; paquets: string[] };
 
-// On n'inclut que des paquets présents dans Alpine (le reste, 28 000+, s'installe à la demande
-// avec « apk add »). Un toucher fait « apk update » puis installe le pack.
+// Outils de type Kali qui existent DANS Alpine (le reste s'installe à la demande avec « apk add »).
+// Beaucoup d'outils de Kali ne sont pas empaquetés pour Alpine : ceux-là ne sont pas listés ici.
 const PACKS: Pack[] = [
-  { nom: 'Réseau', icone: '🌐', paquets: ['nmap', 'tcpdump', 'netcat-openbsd', 'bind-tools', 'curl', 'wget', 'mtr', 'openssh'] },
-  { nom: 'Wi-Fi et mots de passe', icone: '📶', paquets: ['aircrack-ng', 'wireless-tools', 'john', 'hydra'] },
-  { nom: 'Web', icone: '🕸️', paquets: ['curl', 'wget', 'nikto', 'whatweb'] },
+  { nom: 'Réseau et scan', icone: '🌐', paquets: ['nmap', 'nmap-scripts', 'masscan', 'tcpdump', 'netcat-openbsd', 'socat', 'hping3', 'bind-tools', 'mtr', 'curl', 'wget', 'openssh'] },
+  { nom: 'Wi-Fi et mots de passe', icone: '📶', paquets: ['aircrack-ng', 'wireless-tools', 'iw', 'john', 'hashcat', 'hydra'] },
+  { nom: 'Web', icone: '🕸️', paquets: ['nikto', 'sqlmap', 'whatweb', 'gobuster', 'curl', 'wget'] },
+  { nom: 'Analyse et rétro-ingénierie', icone: '🔬', paquets: ['radare2', 'binwalk', 'foremost', 'wireshark', 'openssl', 'gnupg'] },
   { nom: 'Programmation', icone: '💻', paquets: ['python3', 'py3-pip', 'nodejs', 'npm', 'git', 'gcc', 'make'] },
   { nom: 'Fichiers et système', icone: '🗂️', paquets: ['nano', 'vim', 'htop', 'tree', 'jq', 'file', 'unzip'] },
 ];
 
-/** Commande d'installation d'un pack : met à jour, installe, et dit clairement si ça a réussi. */
+/**
+ * Commande d'installation d'un pack : met à jour, puis installe les paquets UN PAR UN — ainsi un
+ * outil absent d'Alpine n'empêche pas les autres de s'installer. Un résumé indique ce qui a réussi.
+ */
 function commandeInstall(paquets: string[]): string {
   const liste = paquets.join(' ');
   return (
-    `apk update && apk add ${liste} ` +
-    '&& { echo; echo "Installe. Touche un outil dans la liste ou tape son nom. Sers-toi de ces outils ' +
-    'uniquement sur TES appareils et reseaux, ou avec autorisation ecrite."; } ' +
-    '|| { echo; echo "Echec. Verifie ta connexion Internet et l espace disque, puis reessaie."; }'
+    'apk update; ok=0; total=0; for p in ' +
+    liste +
+    '; do total=$((total+1)); if apk add "$p" >/dev/null 2>&1; then ok=$((ok+1)); echo "  [ok] $p"; else echo "  [absent d Alpine] $p"; fi; done; ' +
+    'echo; echo "$ok/$total installes. Les [absent] ne sont pas dans Alpine (essaie: apk search <mot>). ' +
+    'Sers-toi de ces outils uniquement sur TES appareils et reseaux, ou avec autorisation ecrite."'
   );
 }
 
