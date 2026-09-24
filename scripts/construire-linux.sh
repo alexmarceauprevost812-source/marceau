@@ -78,8 +78,8 @@ preparer_archive_sources() {
   local dossier="$TRAVAIL/marceau-sources-linux"
   rm -rf "$dossier"
   mkdir -p "$dossier"
-  cp "$SOURCES"/*.zip "$SOURCES"/*.tar.gz "$dossier/"
-  cp "$0" "$dossier/construire-linux.sh"
+  cp "$SOURCES"/*.zip "$SOURCES"/*.tar.gz "$dossier/" || return 1
+  cp "$0" "$dossier/construire-linux.sh" || return 1
   cat > "$dossier/LISEZ-MOI.md" <<EOF
 # Code source des programmes libres inclus dans l'APK de Marceau
 
@@ -98,7 +98,7 @@ statiquement) et \`libproot-loader*.so\` (le chargeur de PRoot).
 Pour recompiler : installer le NDK Android, puis \`bash construire-linux.sh\` depuis le dépôt Marceau.
 Le texte complet des licences se trouve dans chaque archive (fichiers COPYING / LICENSE).
 EOF
-  tar -czf "$TRAVAIL/marceau-sources-linux.tar.gz" -C "$TRAVAIL" marceau-sources-linux
+  tar -czf "$TRAVAIL/marceau-sources-linux.tar.gz" -C "$TRAVAIL" marceau-sources-linux || return 1
   info "Archive des sources : $TRAVAIL/marceau-sources-linux.tar.gz"
 }
 
@@ -202,13 +202,25 @@ EOF
 }
 
 # ---- Programme principal ------------------------------------------------------------------
+sources_seulement=0
+[ "${1:-}" = "--sources" ] && sources_seulement=1
+
 if ! telecharger_tout; then
+  # En mode « sources seulement », l'archive GPL/LGPL est obligatoire : on échoue pour que la
+  # publication ne mette pas en ligne l'APK sans les sources correspondantes.
+  if [ "$sources_seulement" = 1 ]; then
+    avertir "sources indisponibles : impossible de produire l'archive des sources GPL/LGPL."
+    exit 1
+  fi
   avertir "sources indisponibles : l'onglet Linux du Terminal sera indisponible dans cet APK."
   exit 0
 fi
 
-if [ "${1:-}" = "--sources" ]; then
-  preparer_archive_sources
+if [ "$sources_seulement" = 1 ]; then
+  if ! preparer_archive_sources || [ ! -f "$TRAVAIL/marceau-sources-linux.tar.gz" ]; then
+    avertir "l'archive des sources GPL/LGPL n'a pas pu être produite."
+    exit 1
+  fi
   exit 0
 fi
 

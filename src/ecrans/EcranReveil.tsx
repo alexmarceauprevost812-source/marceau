@@ -56,7 +56,15 @@ export function EcranReveil({ visible, couleurs: c, onFermer }: Props) {
         setReveils((l) => l.map((x) => (x.id === id ? { ...x, actif: false, notifId: undefined } : x)));
       } else {
         const notifId = await programmer(r);
-        setReveils((l) => l.map((x) => (x.id === id ? { ...x, actif: !!notifId, notifId: notifId ?? undefined } : x)));
+        setReveils((l) => {
+          // La ligne a pu être supprimée pendant la programmation : on annule alors la notification
+          // qui vient d'être créée pour ne pas la laisser sonner sans contrôle.
+          if (!l.some((x) => x.id === id)) {
+            annulerRappel(notifId ?? undefined);
+            return l;
+          }
+          return l.map((x) => (x.id === id ? { ...x, actif: !!notifId, notifId: notifId ?? undefined } : x));
+        });
       }
     } finally {
       enCours.current.delete(id);
