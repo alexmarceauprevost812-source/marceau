@@ -16,18 +16,23 @@ const DISPARITION = 450;
  */
 export function Ouverture({ onFini }: { onFini: () => void }) {
   const { width, height } = useWindowDimensions();
-  const opacite = useRef(new Animated.Value(0)).current; // fondu du voile noir + image
+  // Voile noir : opaque dès le départ (aucun flash du Chat), puis disparaît en fondu à la toute fin.
+  const fond = useRef(new Animated.Value(1)).current;
+  // Image : fondu d'apparition, puis reste visible (elle disparaît avec le voile).
+  const image = useRef(new Animated.Value(0)).current;
   const zoom = useRef(new Animated.Value(1.06)).current; // léger zoom arrière sur toute la durée
   const [fini, setFini] = useState(false);
 
   useEffect(() => {
-    // Opacité : apparition (350 ms) → pause → disparition (450 ms) = DUREE au total.
-    // Le zoom tourne EN PARALLÈLE sur toute la durée (il ne rallonge pas la séquence).
+    // Total = DUREE (2 s). Tout tourne EN PARALLÈLE :
+    // - l'image apparaît en fondu (350 ms) sur un fond déjà noir opaque (pas de flash au lancement) ;
+    // - le voile noir reste opaque puis disparaît en fondu sur les 450 dernières ms (révèle le Chat) ;
+    // - léger zoom arrière sur toute la durée.
     Animated.parallel([
+      Animated.timing(image, { toValue: 1, duration: APPARITION, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.sequence([
-        Animated.timing(opacite, { toValue: 1, duration: APPARITION, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-        Animated.delay(DUREE - APPARITION - DISPARITION),
-        Animated.timing(opacite, { toValue: 0, duration: DISPARITION, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(DUREE - DISPARITION),
+        Animated.timing(fond, { toValue: 0, duration: DISPARITION, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
       ]),
       Animated.timing(zoom, { toValue: 1, duration: DUREE, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start(({ finished }) => {
@@ -36,7 +41,7 @@ export function Ouverture({ onFini }: { onFini: () => void }) {
         onFini();
       }
     });
-  }, [opacite, zoom, onFini]);
+  }, [fond, image, zoom, onFini]);
 
   if (fini) return null;
 
@@ -44,8 +49,8 @@ export function Ouverture({ onFini }: { onFini: () => void }) {
 
   return (
     // pointerEvents "auto" : l'overlay bloque les touches tant qu'il est affiché.
-    <Animated.View style={[StyleSheet.absoluteFill, styles.fond, { opacity: opacite }]}>
-      <Animated.View style={{ transform: [{ scale: zoom }] }}>
+    <Animated.View style={[StyleSheet.absoluteFill, styles.fond, { opacity: fond }]}>
+      <Animated.View style={{ opacity: image, transform: [{ scale: zoom }] }}>
         <Image
           source={IMAGES.ouverture}
           style={{ width: cote, height: cote * (720 / 649) }}

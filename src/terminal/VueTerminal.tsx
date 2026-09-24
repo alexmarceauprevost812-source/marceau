@@ -135,11 +135,33 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
     return d;
   }
 
+  // Largeur d'affichage d'un caractère en cellules de terminal (2 pour les emojis / CJK « larges »).
+  function largeurCar(cp){
+    if (cp >= 0x1100 && (
+      cp <= 0x115f || cp === 0x2329 || cp === 0x232a ||
+      (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f) ||
+      (cp >= 0xac00 && cp <= 0xd7a3) ||
+      (cp >= 0xf900 && cp <= 0xfaff) ||
+      (cp >= 0xfe30 && cp <= 0xfe4f) ||
+      (cp >= 0xff00 && cp <= 0xff60) ||
+      (cp >= 0xffe0 && cp <= 0xffe6) ||
+      (cp >= 0x1f300 && cp <= 0x1faff) ||
+      (cp >= 0x20000 && cp <= 0x3fffd)
+    )) return 2;
+    return 1;
+  }
+  function largeurLigne(s){
+    var arr = Array.from(s), w = 0;
+    for (var i = 0; i < arr.length; i++) w += largeurCar(arr[i].codePointAt(0));
+    return w;
+  }
+
   // ----- Mode ligne (Termux) -----
   var ligne = '', historique = [], position = 0;
-  // Efface la ligne affichée puis la redessine colorée (1er mot or, reste lime).
+  // Efface la ligne affichée (par LARGEUR d'affichage, pas par nombre de caractères) puis la
+  // redessine colorée. Utilisé pour la navigation dans l'historique et l'effacement arrière.
   function afficherLigne(nouvelle){
-    var vieux = Array.from(ligne).length;
+    var vieux = largeurLigne(ligne);
     for (var i = 0; i < vieux; i++) term.write('\\b \\b');
     ligne = nouvelle; term.write(rendreLigne(ligne));
   }
@@ -165,7 +187,12 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
       } else if (c === '\\x0c') {
         term.clear();
       } else if (c >= ' ' || c === '\\t') {
-        afficherLigne(ligne + c);
+        // Ajout simple en fin de ligne : on écrit seulement le nouveau caractère coloré (pas de
+        // redessin complet), donc pas de décalage avec les caractères larges. Le 1er mot (avant la
+        // 1re espace) est en or, le reste en vert lime.
+        var enMot = ligne.indexOf(' ') < 0 && ligne.indexOf('\\t') < 0 && c !== ' ' && c !== '\\t';
+        ligne += c;
+        term.write((enMot ? COMMANDE : SAISIE) + c + FIN);
       }
     }
   }
