@@ -33,7 +33,15 @@ export function EcranTerminal({ couleurs: c }: { couleurs: Couleurs }) {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Entete couleurs={c} titre="Terminal" />
+      <Entete
+        couleurs={c}
+        titre="Terminal"
+        droite={
+          <Text numberOfLines={1} style={styles.badge}>
+            [ <Text style={{ color: c.accentTexte }}>Alpine</Text> <Text style={{ color: c.texte }}>Linux</Text> ]
+          </Text>
+        }
+      />
       <PanneauLinux couleurs={c} infos={infos} rafraichir={rafraichir} />
     </KeyboardAvoidingView>
   );
@@ -42,4 +50,5 @@ export function EcranTerminal({ couleurs: c }: { couleurs: Couleurs }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   absent: { fontSize: 15, lineHeight: 22, paddingHorizontal: 20 },
+  badge: { fontSize: 14, fontWeight: '800', fontFamily: 'monospace' },
 });
