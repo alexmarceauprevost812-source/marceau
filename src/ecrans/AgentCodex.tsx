@@ -7,6 +7,7 @@ import { FOURNISSEURS, manqueCle } from '../ia/fournisseurs';
 import { useConnexion, useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 import type { Fichier, Projet } from '../types';
+import { CarteChangement, totalChangements, type Changement } from '../ui/CarteChangement';
 import { Markdown } from '../ui/Markdown';
 
 /** Consigne de l'agent : l'arborescence seulement, Claude lit lui-même les fichiers utiles. */
@@ -73,6 +74,16 @@ function appliquer(proj: Projet, r: ResultatAgent): Projet {
   return { ...proj, fichiers, supprimes };
 }
 
+/** Fichiers touchés par l'agent, avec leur contenu avant / après (pour les compter et les afficher). */
+function listerChangements(avant: Fichier[], r: ResultatAgent): Changement[] {
+  const anciens = new Map(avant.map((f) => [f.chemin, f.contenu]));
+  return [
+    ...r.crees.map((chemin) => ({ chemin, ancien: null, nouveau: r.fichiers[chemin] ?? '' })),
+    ...r.modifies.map((chemin) => ({ chemin, ancien: anciens.get(chemin) ?? '', nouveau: r.fichiers[chemin] ?? '' })),
+    ...r.supprimes.map((chemin) => ({ chemin, ancien: anciens.get(chemin) ?? '', nouveau: null })),
+  ];
+}
+
 function resumeChangements(r: ResultatAgent): string {
   const lignes = [
     ...r.crees.map((c) => `- ➕ \`${c}\``),
@@ -97,10 +108,13 @@ export function AgentCodex({
   const [etapes, setEtapes] = useState<EtapeAgent[] | null>(null);
   // Version du projet avant le dernier passage de l'agent, pour pouvoir tout annuler.
   const [avant, setAvant] = useState<Pick<Projet, 'fichiers' | 'supprimes'> | null>(null);
+  // Fichiers changés au dernier passage de l'agent (code en couleur, lignes ajoutées / retirées).
+  const [changements, setChangements] = useState<Changement[] | null>(null);
   const controleur = useRef<AbortController | null>(null);
   const defilement = useRef<ScrollView>(null);
   const messages = p.messagesAgent ?? [];
   const occupe = etapes !== null;
+  const total = changements ? totalChangements(changements) : null;
 
   if (connexion.fournisseur !== 'anthropic' || manqueCle(connexion)) {
     const autreIA = connexion.fournisseur !== 'anthropic';
@@ -132,6 +146,7 @@ export function AgentCodex({
     const historique: MessageIA[] = [...messages, { role: 'user', content: demande }];
     onModifier((proj) => ({ ...proj, messagesAgent: historique }));
     setEtapes([]);
+    setChangements(null);
     const ctrl = new AbortController();
     controleur.current = ctrl;
     const fichiers: FichiersAgent = Object.fromEntries(p.fichiers.map((f) => [f.chemin, f.contenu]));
@@ -155,7 +170,10 @@ export function AgentCodex({
         const suivant = changement ? appliquer(proj, r) : proj;
         return { ...suivant, messagesAgent: [...historique, { role: 'assistant', content: reponse }] };
       });
-      if (changement) setAvant(depart);
+      if (changement) {
+        setAvant(depart);
+        setChangements(listerChangements(depart.fichiers, r));
+      }
     } catch (e) {
       const arret = (e as Error)?.name === 'AbortError';
       const texte = arret ? '⏹ Arrêté. Aucun fichier n’a été changé.' : `⚠️ ${(e as Error).message}\n\nAucun fichier n’a été changé.`;
@@ -182,6 +200,7 @@ export function AgentCodex({
             messagesAgent: [...(proj.messagesAgent ?? []), { role: 'assistant', content: '↩ Changements annulés.' }],
           }));
           setAvant(null);
+          setChangements(null);
         },
       },
     ]);
@@ -226,6 +245,19 @@ export function AgentCodex({
               <ActivityIndicator color={c.accentTexte} />
               <Text style={{ color: c.texteDoux }}>Claude travaille…</Text>
             </View>
+          </View>
+        )}
+        {changements && total && changements.length > 0 && !occupe && (
+          <View style={styles.changements}>
+            <Text style={[styles.titreChangements, { color: c.texte }]}>
+              📝 Code écrit :{' '}
+              <Text style={{ color: c.code.ajout }}>+{total.ajouts}</Text>{' '}
+              <Text style={{ color: c.code.retrait }}>−{total.retraits}</Text>
+              <Text style={{ color: c.texteDoux, fontWeight: '400' }}> lignes · touche un fichier pour voir le code</Text>
+            </Text>
+            {changements.map((ch) => (
+              <CarteChangement key={ch.chemin} changement={ch} couleurs={c} />
+            ))}
           </View>
         )}
         {avant && !occupe && (
@@ -279,6 +311,8 @@ const styles = StyleSheet.create({
   bouton: { paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
   bulleMoi: { alignSelf: 'flex-end', maxWidth: '85%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   bulleAgent: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6 },
+  changements: { gap: 8 },
+  titreChangements: { fontSize: 15, fontWeight: '800' },
   enCours: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   boutonAnnuler: { alignSelf: 'center', borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
   saisie: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, borderTopWidth: StyleSheet.hairlineWidth },
