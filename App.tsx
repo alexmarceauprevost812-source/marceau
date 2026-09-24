@@ -107,10 +107,10 @@ export default function App() {
           />
           <EcranAgenda visible={agendaOuvert} couleurs={couleurs} onFermer={() => setAgendaOuvert(false)} />
           <EcranCarte visible={carteOuverte} couleurs={couleurs} onFermer={() => setCarteOuverte(false)} />
-          {/* Le verrou est un Modal natif : monté seulement après l'écran d'ouverture, sinon sa
-              fenêtre native passerait par-dessus l'animation, qui jouerait sans être vue. Pendant
-              l'ouverture, l'écran est de toute façon couvert (fond noir) et les touches bloquées. */}
-          {ouvert && <Verrou couleurs={couleurs} />}
+          {/* Le verrou reste monté en permanence (sécurité) : il ne faut jamais laisser voir le Chat
+              sans lui. L'écran d'ouverture est lui-même un Modal rendu par-dessus, donc l'animation
+              s'affiche au premier plan sans démonter le verrou. */}
+          <Verrou couleurs={couleurs} />
           <Reactions couleurs={couleurs} />
           {!ouvert && <Ouverture onFini={finOuverture} />}
           <StatusBar style={nuit ? 'light' : 'dark'} />

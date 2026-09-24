@@ -181,7 +181,12 @@ html,body{margin:0;padding:0;height:100%;background:${t.fond};overflow:hidden}
         envoyer({ type: 'ligne', texte: ligne });
         ligne = '';
       } else if (c === '\\x7f' || c === '\\b') {
-        if (ligne) { var a = Array.from(ligne); a.pop(); afficherLigne(a.join('')); }
+        // Efface uniquement le dernier caractère (pas de redessin complet), sur sa largeur d'affichage.
+        if (ligne) {
+          var a = Array.from(ligne); var dernier = a.pop(); ligne = a.join('');
+          var w = largeurCar(dernier.codePointAt(0));
+          for (var k = 0; k < w; k++) term.write('\\b \\b');
+        }
       } else if (c === '\\x03') {
         term.write('^C\\r\\n'); ligne = ''; envoyer({ type: 'interrompre' });
       } else if (c === '\\x0c') {

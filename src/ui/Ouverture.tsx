@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, StyleSheet, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Image, Modal, StyleSheet, useWindowDimensions } from 'react-native';
 
 import { IMAGES } from '../images';
 
@@ -48,17 +48,22 @@ export function Ouverture({ onFini }: { onFini: () => void }) {
   const cote = Math.min(width * 0.82, height * 0.6);
 
   return (
-    // pointerEvents "auto" : l'overlay bloque les touches tant qu'il est affiché.
-    <Animated.View style={[StyleSheet.absoluteFill, styles.fond, { opacity: fond }]}>
-      <Animated.View style={{ opacity: image, transform: [{ scale: zoom }] }}>
-        <Image
-          source={IMAGES.ouverture}
-          style={{ width: cote, height: cote * (720 / 649) }}
-          resizeMode="contain"
-          accessibilityLabel="Marceau"
-        />
+    // Rendu dans un Modal (fenêtre native) pour passer AU-DESSUS du verrou, qui est lui aussi un Modal
+    // natif : ainsi l'animation joue bien au premier plan pendant que le verrou reste monté dessous.
+    // Transparent : quand le voile noir disparaît en fondu à la fin, on révèle ce qui est en dessous —
+    // l'écran de verrouillage s'il est actif, sinon le Chat. L'overlay bloque les touches jusqu'au bout.
+    <Modal visible transparent statusBarTranslucent animationType="none" onRequestClose={() => {}}>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.fond, { opacity: fond }]}>
+        <Animated.View style={{ opacity: image, transform: [{ scale: zoom }] }}>
+          <Image
+            source={IMAGES.ouverture}
+            style={{ width: cote, height: cote * (720 / 649) }}
+            resizeMode="contain"
+            accessibilityLabel="Marceau"
+          />
+        </Animated.View>
       </Animated.View>
-    </Animated.View>
+    </Modal>
   );
 }
 
