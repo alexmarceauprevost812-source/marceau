@@ -19,6 +19,7 @@ import { MenuLateral, MenuProvider, type Section } from './src/navigation/Menu';
 import { Verrou } from './src/securite/Verrou';
 import { useCouleurs, useModeNuit } from './src/theme';
 import { Reactions } from './src/ui/Avatar';
+import { Ouverture } from './src/ui/Ouverture';
 
 type Ecran = Exclude<Section, 'agenda' | 'carte' | 'parametres' | 'preferences'>;
 
@@ -34,6 +35,8 @@ export default function App() {
   const [reglagesOuverts, setReglagesOuverts] = useState<Espace | null>(null);
   const ouvrirReglages = useCallback((espace: Espace = 'chat') => setReglagesOuverts(espace), []);
   const [bureauOuvert, setBureauOuvert] = useState(false);
+  // Écran d'ouverture (2 s) au lancement de l'application.
+  const [ouvert, setOuvert] = useState(false);
   // Le Terminal n'est chargé qu'à sa première ouverture.
   const [terminalOuvert, setTerminalOuvert] = useState(false);
   useEffect(() => {
@@ -104,6 +107,7 @@ export default function App() {
           <EcranCarte visible={carteOuverte} couleurs={couleurs} onFermer={() => setCarteOuverte(false)} />
           <Verrou couleurs={couleurs} />
           <Reactions couleurs={couleurs} />
+          {!ouvert && <Ouverture onFini={() => setOuvert(true)} />}
           <StatusBar style={nuit ? 'light' : 'dark'} />
         </MenuProvider>
       </ReglagesIAProvider>
