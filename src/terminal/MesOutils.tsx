@@ -1,22 +1,57 @@
 // SPDX-License-Identifier: MIT
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Terminal } from '../../modules/marceau-terminal';
+import { nouvelId, usePersistant } from '../hooks/usePersistant';
 import type { Couleurs } from '../theme';
 
 type Props = {
   visible: boolean;
   couleurs: Couleurs;
   onFermer: () => void;
-  /** Lance l'outil dans le terminal Linux (tape son nom puis Entrée). */
-  onLancer: (outil: string) => void;
+  /** Lance une ligne de commande dans le terminal Linux (la tape puis Entrée). */
+  onLancer: (commande: string) => void;
 };
 
-/** Mes outils : ce que tu as installé dans le Linux avec « apk add », à lancer d'un toucher. */
+/** Une commande de ta bibliothèque : un nom à toucher et la ligne de commande qu'il lance. */
+type Commande = { id: string; nom: string; commande: string };
+
+const COMMANDES_DE_DEPART: Commande[] = [
+  { id: 'maj', nom: 'Mettre à jour Linux', commande: 'apk update && apk upgrade' },
+  { id: 'disque', nom: 'Espace disque', commande: 'df -h / && du -sh ~/* 2>/dev/null | sort -h | tail -5' },
+  { id: 'telephone', nom: 'Mes fichiers du téléphone', commande: 'ls -la /telephone' },
+  { id: 'git', nom: 'Statut git', commande: 'git status' },
+];
+
+/**
+ * Mes outils : ta bibliothèque de commandes (nom → ligne de commande, enregistrée sur le téléphone)
+ * et ce que tu as installé dans le Linux avec « apk add ». Tout se lance d'un toucher.
+ */
 export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
   const [outils, setOutils] = useState<string[]>([]);
+  const [commandes, setCommandes] = usePersistant<Commande[]>('marceau:commandes-linux', COMMANDES_DE_DEPART);
+  const [nom, setNom] = useState('');
+  const [ligne, setLigne] = useState('');
+
+  const ajouter = () => {
+    const n = nom.trim();
+    const l = ligne.trim();
+    if (!n || !l) {
+      Alert.alert('Il manque quelque chose', 'Donne un nom au bouton et écris la commande qu’il doit lancer.');
+      return;
+    }
+    setCommandes((liste) => [...liste, { id: nouvelId(), nom: n, commande: l }]);
+    setNom('');
+    setLigne('');
+  };
+
+  const supprimer = (cmd: Commande) =>
+    Alert.alert('Supprimer ce bouton ?', `« ${cmd.nom} » : ${cmd.commande}`, [
+      { text: 'Non', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: () => setCommandes((l) => l.filter((x) => x.id !== cmd.id)) },
+    ]);
 
   // Relue à chaque ouverture : un outil vient peut-être d'être installé.
   useEffect(() => {
@@ -39,7 +74,59 @@ export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
           <View style={{ width: 60 }} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.corps}>
+        <ScrollView contentContainerStyle={styles.corps} keyboardShouldPersistTaps="handled">
+          <Text style={[styles.section, { color: c.texte }]}>⚡ Mes commandes</Text>
+          <Text style={[styles.intro, { color: c.texteDoux }]}>
+            Touche un bouton pour lancer sa commande dans le terminal. Appui long pour le supprimer.
+          </Text>
+          {commandes.map((cmd) => (
+            <Pressable
+              key={cmd.id}
+              onPress={() => onLancer(cmd.commande)}
+              onLongPress={() => supprimer(cmd)}
+              accessibilityRole="button"
+              accessibilityLabel={`Lancer ${cmd.nom}`}
+              accessibilityHint="Appui long pour supprimer"
+              style={({ pressed }) => [
+                styles.ligne,
+                { backgroundColor: c.carte, borderColor: c.bordure, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <View style={styles.flex}>
+                <Text style={[styles.nom, { color: c.texte }]}>{cmd.nom}</Text>
+                <Text numberOfLines={1} style={[styles.detail, { color: c.accentTexte }]}>
+                  {cmd.commande}
+                </Text>
+              </View>
+              <Text style={[styles.lancer, { color: c.texteDoux }]}>▶</Text>
+            </Pressable>
+          ))}
+          <View style={[styles.ajout, { backgroundColor: c.carte, borderColor: c.bordure }]}>
+            <TextInput
+              value={nom}
+              onChangeText={setNom}
+              placeholder="Nom du bouton (ex. : Voir mon réseau)"
+              placeholderTextColor={c.texteDoux}
+              style={[styles.champ, { color: c.texte, borderColor: c.bordure }]}
+              accessibilityLabel="Nom du nouveau bouton"
+            />
+            <TextInput
+              value={ligne}
+              onChangeText={setLigne}
+              placeholder="Commande (ex. : ip addr)"
+              placeholderTextColor={c.texteDoux}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.champ, styles.champCode, { color: c.texte, borderColor: c.bordure }]}
+              accessibilityLabel="Commande du nouveau bouton"
+              onSubmitEditing={ajouter}
+            />
+            <Pressable onPress={ajouter} accessibilityRole="button" style={[styles.bouton, { backgroundColor: c.accent }]}>
+              <Text style={{ color: c.surAccent, fontWeight: '800' }}>＋ Ajouter le bouton</Text>
+            </Pressable>
+          </View>
+
+          <Text style={[styles.section, { color: c.texte }]}>🧰 Outils installés</Text>
           {outils.length === 0 ? (
             <Text style={[styles.intro, { color: c.texteDoux }]}>
               Aucun outil installé pour l’instant. Dans le terminal, tape par exemple « apk add nano python3 git » :
@@ -91,6 +178,13 @@ const styles = StyleSheet.create({
   lien: { fontSize: 15, fontWeight: '700' },
   titre: { fontSize: 17, fontWeight: '800' },
   corps: { padding: 16, gap: 8 },
+  section: { fontSize: 16, fontWeight: '800', marginTop: 8 },
+  nom: { fontSize: 15, fontWeight: '700' },
+  detail: { fontSize: 13, fontFamily: 'monospace', marginTop: 2 },
+  ajout: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, gap: 8 },
+  champ: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
+  champCode: { fontFamily: 'monospace' },
+  bouton: { paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   intro: { fontSize: 14, lineHeight: 20, marginBottom: 6 },
   ligne: {
     flexDirection: 'row',
