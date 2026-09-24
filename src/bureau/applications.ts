@@ -18,6 +18,7 @@ export const APPLICATIONS: AppBureau[] = [
   { id: 'codex', nom: 'Codex', icone: '💻', couleur: '#2F6FEB', ouvre: 'codex' },
   { id: 'projet', nom: 'Projet', icone: '📁', couleur: '#1F9D55', ouvre: 'projet' },
   { id: 'terminal', nom: 'Terminal', icone: '⌨️', couleur: '#1B1B1B', ouvre: 'terminal' },
+  { id: 'commandes', nom: 'Commandes', icone: '📖', couleur: '#0F7D74', ouvre: 'commandes' },
   { id: 'parametres', nom: 'Paramètres', icone: '⚙️', couleur: '#5B6068', ouvre: 'parametres' },
   { id: 'agenda', nom: 'Agenda', icone: '📅', couleur: '#0B8F3A', ouvre: 'agenda' },
   { id: 'notes', nom: 'Notes', icone: '🗒️', couleur: '#F4B400', ouvre: 'notes' },

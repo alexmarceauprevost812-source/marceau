@@ -66,7 +66,8 @@ const SECTIONS: Section[] = [
 
 type Props = { visible: boolean; couleurs: Couleurs; onFermer: () => void };
 
-export function AideLinux({ visible, couleurs: c, onFermer }: Props) {
+/** La liste des commandes (réutilisée par l'aide du terminal et l'application « Commandes terminal »). */
+export function ListeCommandes({ couleurs: c }: { couleurs: Couleurs }) {
   const [copie, setCopie] = useState<string | null>(null);
 
   const copier = async (cmd: string) => {
@@ -78,6 +79,50 @@ export function AideLinux({ visible, couleurs: c, onFermer }: Props) {
   };
 
   return (
+    <ScrollView contentContainerStyle={styles.corps}>
+      <Text style={[styles.intro, { color: c.texteDoux }]}>
+        Touche une commande pour la copier, puis colle-la dans le terminal. N'utilise jamais « sudo » (tu es déjà
+        administrateur).
+      </Text>
+
+      {SECTIONS.map((s) => (
+        <View key={s.titre} style={styles.section}>
+          <Text style={[styles.sousTitre, { color: c.texte }]}>{s.titre}</Text>
+          {s.commandes.map((cmd) => {
+            const estCopie = copie === cmd.cmd;
+            return (
+              <Pressable
+                key={cmd.cmd + cmd.quoi}
+                onPress={() => copier(cmd.cmd)}
+                accessibilityRole="button"
+                accessibilityLabel={`Copier ${cmd.cmd}`}
+                style={({ pressed }) => [
+                  styles.ligne,
+                  { backgroundColor: c.carte, borderColor: estCopie ? c.accent : c.bordure, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <View style={styles.flex}>
+                  <Text style={[styles.cmd, { color: c.accentTexte }]}>{cmd.cmd}</Text>
+                  <Text style={[styles.quoi, { color: c.texteDoux }]}>{cmd.quoi}</Text>
+                </View>
+                <Text style={[styles.copier, { color: estCopie ? c.accent : c.texteDoux }]}>
+                  {estCopie ? '✓ copié' : '⧉'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
+
+      <Text style={[styles.pied, { color: c.texteDoux }]}>
+        Sers-toi de ces outils uniquement sur tes propres appareils et réseaux, ou avec une autorisation écrite.
+      </Text>
+    </ScrollView>
+  );
+}
+
+export function AideLinux({ visible, couleurs: c, onFermer }: Props) {
+  return (
     <Modal visible={visible} animationType="slide" onRequestClose={onFermer} statusBarTranslucent>
       <SafeAreaView style={[styles.flex, { backgroundColor: c.fond }]}>
         <View style={[styles.entete, { borderColor: c.bordure }]}>
@@ -87,46 +132,7 @@ export function AideLinux({ visible, couleurs: c, onFermer }: Props) {
           <Text style={[styles.titre, { color: c.texte }]}>📖 Commandes Linux</Text>
           <View style={{ width: 60 }} />
         </View>
-
-        <ScrollView contentContainerStyle={styles.corps}>
-          <Text style={[styles.intro, { color: c.texteDoux }]}>
-            Touche une commande pour la copier, puis colle-la dans le terminal. N'utilise jamais « sudo » (tu es déjà
-            administrateur).
-          </Text>
-
-          {SECTIONS.map((s) => (
-            <View key={s.titre} style={styles.section}>
-              <Text style={[styles.sousTitre, { color: c.texte }]}>{s.titre}</Text>
-              {s.commandes.map((cmd) => {
-                const estCopie = copie === cmd.cmd;
-                return (
-                  <Pressable
-                    key={cmd.cmd + cmd.quoi}
-                    onPress={() => copier(cmd.cmd)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Copier ${cmd.cmd}`}
-                    style={({ pressed }) => [
-                      styles.ligne,
-                      { backgroundColor: c.carte, borderColor: estCopie ? c.accent : c.bordure, opacity: pressed ? 0.7 : 1 },
-                    ]}
-                  >
-                    <View style={styles.flex}>
-                      <Text style={[styles.cmd, { color: c.accentTexte }]}>{cmd.cmd}</Text>
-                      <Text style={[styles.quoi, { color: c.texteDoux }]}>{cmd.quoi}</Text>
-                    </View>
-                    <Text style={[styles.copier, { color: estCopie ? c.accent : c.texteDoux }]}>
-                      {estCopie ? '✓ copié' : '⧉'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ))}
-
-          <Text style={[styles.pied, { color: c.texteDoux }]}>
-            Sers-toi de ces outils uniquement sur tes propres appareils et réseaux, ou avec une autorisation écrite.
-          </Text>
-        </ScrollView>
+        <ListeCommandes couleurs={c} />
       </SafeAreaView>
     </Modal>
   );
