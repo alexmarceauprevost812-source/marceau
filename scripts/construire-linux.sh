@@ -50,15 +50,22 @@ info() { echo "[linux] $*"; }
 avertir() { echo "[linux] ATTENTION : $*" >&2; }
 
 # ---- Téléchargement vérifié -------------------------------------------------------------
+# Empreinte SHA-256 portable : sha256sum (Linux) ou shasum -a 256 (macOS).
+empreinte() {
+  if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1
+  else shasum -a 256 "$1" | cut -d' ' -f1
+  fi
+}
+
 telecharger() { # url fichier sha256
   local url="$1" fichier="$SOURCES/$2" attendu="$3"
-  if [ ! -f "$fichier" ] || [ "$(sha256sum "$fichier" | cut -d' ' -f1)" != "$attendu" ]; then
+  if [ ! -f "$fichier" ] || [ "$(empreinte "$fichier")" != "$attendu" ]; then
     info "Téléchargement de $2"
     curl -fsSL --retry 3 -o "$fichier.tmp" "$url" || { avertir "téléchargement impossible : $url"; return 1; }
     mv "$fichier.tmp" "$fichier"
   fi
   local obtenu
-  obtenu="$(sha256sum "$fichier" | cut -d' ' -f1)"
+  obtenu="$(empreinte "$fichier")"
   if [ "$obtenu" != "$attendu" ]; then
     avertir "$2 : empreinte SHA-256 différente ($obtenu), fichier refusé"
     rm -f "$fichier"
@@ -108,10 +115,13 @@ trouver_ndk() {
   for candidat in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}" "${ANDROID_NDK_LATEST_HOME:-}" "${ANDROID_NDK:-}"; do
     [ -n "$candidat" ] && [ -d "$candidat/toolchains/llvm" ] && { echo "$candidat"; return 0; }
   done
-  for base in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" /usr/local/lib/android/sdk "$HOME/Android/Sdk"; do
+  for base in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" /usr/local/lib/android/sdk "$HOME/Android/Sdk" \
+    "$HOME/Library/Android/sdk"; do
     [ -n "$base" ] && [ -d "$base/ndk" ] || continue
-    candidat="$(ls -d "$base"/ndk/*/ 2>/dev/null | sort -V | tail -1)"
-    [ -n "$candidat" ] && [ -d "$candidat/toolchains/llvm" ] && { echo "${candidat%/}"; return 0; }
+    # Version la plus récente (tri numérique portable, sans « sort -V » propre à GNU).
+    candidat="$(ls -1 "$base/ndk" 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
+    candidat="$base/ndk/$candidat"
+    [ -d "$candidat/toolchains/llvm" ] && { echo "$candidat"; return 0; }
   done
   return 1
 }
