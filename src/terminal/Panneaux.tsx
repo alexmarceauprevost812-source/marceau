@@ -225,7 +225,7 @@ function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
         <Bouton couleurs={c} libelle="🧰 Mes outils" compact secondaire onPress={() => setOutils(true)} />
         <Bouton couleurs={c} libelle="📖 Commandes" compact secondaire onPress={() => setAide(true)} />
-        <Bouton couleurs={c} libelle="🐉 Kali" compact secondaire onPress={() => Linking.openURL(LIEN_KALI)} />
+        <Bouton couleurs={c} libelle="📦 Catalogue Alpine" compact secondaire onPress={() => Linking.openURL(LIEN_CATALOGUE)} />
       </View>
       <SessionPty couleurs={c} type="linux" />
       <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
@@ -243,8 +243,8 @@ function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
   );
 }
 
-/** Catalogue officiel des outils de Kali Linux (à lire dans le navigateur, pas exécuté par l'appli). */
-export const LIEN_KALI = 'https://www.kali.org/tools/';
+/** Catalogue officiel des paquets Alpine : c'est CE que « apk add » installe (à lire dans le navigateur). */
+export const LIEN_CATALOGUE = 'https://pkgs.alpinelinux.org/packages';
 
 // ---------------------------------------------------------------------------
 // Option 2 : Termux
