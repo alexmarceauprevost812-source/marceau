@@ -152,6 +152,12 @@ internal object Linux {
 
     val archive = File(ctx.cacheDir, fichier)
     val temporaire = File(dossier(ctx), "racine-tmp")
+    // Un rootfs à moitié extrait peut rester d'une tentative précédente interrompue par Android
+    // lui-même (l'appli tuée pendant l'extraction ne passe par aucun bloc catch) : on l'efface
+    // AVANT de télécharger la nouvelle archive, pas seulement après — sinon les deux occupent le
+    // disque en même temps, et c'est justement ce qui ferait échouer le nouveau téléchargement
+    // sur un téléphone à court d'espace.
+    supprimerSansSuivre(temporaire)
     // Si une étape échoue (disque plein, coupure réseau…), on efface ce qu'on a commencé à
     // écrire — l'archive téléchargée ET le rootfs à moitié extrait — pour ne pas laisser
     // plusieurs centaines de Mo inutiles, surtout gênants quand la panne vient d'un disque plein.
@@ -170,7 +176,6 @@ internal object Linux {
       // quand même par une connexion chiffrée (HTTPS) vers le serveur officiel de Kali.
 
       progression("Installation des fichiers (ça prend un moment)…", 100)
-      supprimerSansSuivre(temporaire)
       temporaire.mkdirs()
       extraireTarXz(archive, temporaire)
 
