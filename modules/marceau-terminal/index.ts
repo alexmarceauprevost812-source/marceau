@@ -37,8 +37,8 @@ type ModuleNatif = {
   installerLinux(): Promise<void>;
   supprimerLinux(): Promise<void>;
   ouvrirLinux(id: string, colonnes: number, lignes: number): Promise<void>;
-  /** Outils installés dans le Linux avec « apk add » (sans les paquets de base). */
-  outilsLinux(): string[];
+  /** Outils installés dans le Linux avec « apt install » (sans les paquets de base). */
+  outilsLinux(): Promise<string[]>;
   ouvrirSsh(id: string, options: OptionsSsh, colonnes: number, lignes: number): Promise<void>;
   oublierServeursSsh(): Promise<void>;
   ecrire(id: string, texte: string): Promise<void>;

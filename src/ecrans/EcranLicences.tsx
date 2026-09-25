@@ -99,8 +99,9 @@ export function EcranLicences({ visible, couleurs: c, onFermer }: { visible: boo
             </Text>
             {lien('Télécharger le code source (GitHub, dernière version)', SOURCES_GPL)}
             <Text style={[styles.petit, { color: c.texteDoux }]}>
-              Alpine Linux n’est pas inclus dans l’APK : ton téléphone le télécharge directement depuis les serveurs
-              d’Alpine quand tu l’installes.
+              Le rootfs de Kali Linux (NetHunter) n’est pas inclus dans l’APK : ton téléphone le télécharge
+              directement depuis les serveurs officiels de Kali quand tu l’installes (connexion chiffrée), avec
+              vérification de l’empreinte quand Kali en publie une pour ce fichier.
             </Text>
 
             <Text style={[styles.section, { color: c.texte }]}>Bibliothèques JavaScript</Text>

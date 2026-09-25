@@ -14,7 +14,7 @@ const ONGLETS: { cle: Onglet; libelle: string }[] = [
   { cle: 'telephone', libelle: '📱 Téléphone' },
 ];
 
-/** Terminal : Linux intégré (Alpine/PRoot), Termux (app installée), et le shell du téléphone. */
+/** Terminal : Linux intégré (Kali/PRoot), Termux (app installée), et le shell du téléphone. */
 export function EcranTerminal({ couleurs: c }: { couleurs: Couleurs }) {
   const [infos, setInfos] = useState<InfosTerminal | null>(() => Terminal?.infos() ?? null);
   const [onglet, setOnglet] = useState<Onglet>('linux');

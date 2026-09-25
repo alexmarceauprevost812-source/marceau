@@ -16,7 +16,7 @@ import kotlin.concurrent.thread
  *  - « Téléphone » : shell Android (option 1)
  *  - « Termux »    : commandes envoyées à l'appli Termux (option 2)
  *  - « SSH »       : terminal vers un ordinateur (option 3)
- *  - « Linux »     : Alpine Linux intégré avec PRoot (option 4)
+ *  - « Linux »     : Kali Linux intégré (rootfs officiel NetHunter) avec PRoot (option 4)
  */
 class MarceauTerminalModule : Module() {
   private val sessions = ConcurrentHashMap<String, Session>()
@@ -90,7 +90,9 @@ class MarceauTerminalModule : Module() {
     }
 
     // ---------- Option 4 : Linux ----------
-    Function("outilsLinux") { Linux.outilsInstalles(ctx) }
+    // AsyncFunction (pas Function) : lit et analyse dpkg/status et apt/extended_states, qui
+    // peuvent être volumineux (surtout avec l'édition « full ») — ne doit pas bloquer le pont JS.
+    AsyncFunction("outilsLinux") { Linux.outilsInstalles(ctx) }
 
     AsyncFunction("installerLinux") { promise: Promise ->
       thread(name = "installation-linux") {

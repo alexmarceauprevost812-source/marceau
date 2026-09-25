@@ -149,7 +149,7 @@ function SessionPty({ couleurs, type }: { couleurs: Couleurs; type: 'telephone' 
         taille.current = { c, l };
         if (type === 'linux') {
           terminal.current?.ecrire(
-            GRIS('Alpine Linux — installe des outils avec : apk add python3 git nodejs nano\r\n') +
+            GRIS('Kali Linux — installe des outils avec : apt install python3 git nodejs nano\r\n') +
               GRIS('Tes fichiers du terminal Téléphone sont dans /telephone\r\n\r\n'),
           );
         }
@@ -210,8 +210,8 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
     return (
       <Info
         couleurs={c}
-        titre="Un vrai Linux dans ton téléphone"
-        texte="Marceau peut installer Alpine Linux (environ 4 Mo à télécharger). Tu pourras ensuite ajouter des milliers d'outils à la demande avec « apk add » (Python, Git, Node.js, nmap, hydra, aircrack-ng…). Tape « outils » dans le terminal pour voir comment faire. Le bouton « 📖 Outils » ouvre le catalogue Kali."
+        titre="Un vrai Kali Linux dans ton téléphone"
+        texte="Marceau peut installer le rootfs officiel de Kali Linux (NetHunter, plusieurs centaines de Mo à télécharger — mieux vaut être en Wi-Fi). Tu pourras ensuite ajouter les outils de sécurité de Kali à la demande avec « apt install » (Python, Git, Node.js, nmap, hydra, aircrack-ng…). Tape « outils » dans le terminal pour voir comment faire. Le bouton « 📖 Commandes » ouvre l'aide, et « 📦 Catalogue Kali » le catalogue officiel."
       >
         {installation && (
           <Text style={[styles.corps, { color: c.texte }]}>
@@ -237,7 +237,7 @@ function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
         <Bouton couleurs={c} libelle="🧰 Mes outils" compact secondaire onPress={() => setOutils(true)} />
         <Bouton couleurs={c} libelle="📖 Commandes" compact secondaire onPress={() => setAide(true)} />
-        <Bouton couleurs={c} libelle="📦 Catalogue Alpine" compact secondaire onPress={() => Linking.openURL(LIEN_CATALOGUE)} />
+        <Bouton couleurs={c} libelle="📦 Catalogue Kali" compact secondaire onPress={() => Linking.openURL(LIEN_CATALOGUE)} />
       </View>
       <SessionPty couleurs={c} type="linux" />
       <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
@@ -255,8 +255,8 @@ function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
   );
 }
 
-/** Catalogue officiel des paquets Alpine : c'est CE que « apk add » installe (à lire dans le navigateur). */
-export const LIEN_CATALOGUE = 'https://pkgs.alpinelinux.org/packages';
+/** Catalogue officiel des outils Kali : c'est CE que « apt install » installe (à lire dans le navigateur). */
+export const LIEN_CATALOGUE = 'https://www.kali.org/tools/';
 
 // ---------------------------------------------------------------------------
 // Option 2 : Termux
