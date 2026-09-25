@@ -21,8 +21,8 @@ PRoot, talloc et libandroid-shmem sont **compilés à partir de leur code source
 version de l'APK sur GitHub (`marceau-sources-linux.tar.gz`), comme l'exigent la GPL et la LGPL.
 
 Le rootfs de Kali Linux (NetHunter, minimal) n'est pas inclus dans l'APK : le téléphone le télécharge
-directement depuis les serveurs officiels de Kali (kali.download), avec vérification de l'empreinte fournie
-par Kali avant installation.
+directement depuis les serveurs officiels de Kali (kali.download), avec vérification de l'empreinte avant
+installation quand Kali en publie une pour ce fichier.
 
 ## Bibliothèques JavaScript
 

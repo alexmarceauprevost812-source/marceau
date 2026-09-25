@@ -25,7 +25,7 @@ internal object Linux {
   private const val MARQUEUR = ".marceau-installe"
   /** Préfixe du fichier attendu dans le marqueur : distingue un Kali installé d'un ancien Alpine
    *  (versions précédentes de l'appli) qu'il faut réinstaller entièrement. */
-  private const val PREFIXE_MARQUEUR = "kalifs-"
+  private const val PREFIXE_MARQUEUR = "kali-"
   private const val PAQUETS_BASE = ".marceau-paquets-base"
 
   private fun dossier(ctx: Context) = File(ctx.filesDir, "linux")
@@ -99,19 +99,31 @@ internal object Linux {
     }
     val arch = archKali()
     val base = "https://kali.download/nethunter-images/current/rootfs"
-    val fichier = "kalifs-$arch-minimal.tar.xz"
+    progression("Recherche du fichier sur le serveur de Kali…", 0)
+    // « minimal » d'abord (le plus petit) ; « full » si Kali ne le propose plus pour cette
+    // architecture — Kali a déjà changé ce nom de fichier par le passé.
+    val fichier = listOf("minimal", "full")
+      .map { edition -> "kali-nethunter-rootfs-$edition-$arch.tar.xz" }
+      .firstOrNull { candidat -> urlExiste("$base/$candidat") }
+      ?: throw IOException("Aucun rootfs Kali trouvé pour cette architecture ($arch) sur le serveur officiel. Réessaie plus tard.")
 
     progression("Vérification de l'empreinte officielle…", 0)
-    val (algo, empreinteAttendue) = empreinteAttendue(base, fichier)
+    val verif = empreinteAttendue(base, fichier)
 
     val archive = File(ctx.cacheDir, fichier)
     telecharger("$base/$fichier", archive) { p -> progression("Téléchargement de Kali Linux…", p) }
 
     progression("Vérification du fichier…", 100)
-    if (empreinte(algo, archive) != empreinteAttendue) {
-      archive.delete()
-      throw IOException("Le fichier de Kali téléchargé est corrompu ou modifié (empreinte $algo différente). Réessaie.")
+    if (verif != null) {
+      val (algo, empreinteAttendue) = verif
+      if (empreinte(algo, archive) != empreinteAttendue) {
+        archive.delete()
+        throw IOException("Le fichier de Kali téléchargé est corrompu ou modifié (empreinte $algo différente). Réessaie.")
+      }
     }
+    // Kali ne publie pas toujours d'empreinte à côté de ce fichier (constaté sur leurs serveurs) :
+    // dans ce cas on continue sans cette vérification supplémentaire — le téléchargement passe
+    // quand même par une connexion chiffrée (HTTPS) vers le serveur officiel de Kali.
 
     progression("Installation des fichiers (ça prend un moment)…", 100)
     val racine = racine(ctx)
@@ -180,11 +192,13 @@ internal object Linux {
   }
 
   /**
-   * Empreinte officielle du fichier : essaie plusieurs conventions utilisées par les serveurs de
-   * Kali (un fichier `<archive>.sha512sum`/`.sha256sum` à côté de l'archive, sinon un fichier
-   * récapitulatif `SHA512SUMS`/`SHA256SUMS` dans le même dossier). Renvoie l'algorithme utilisé.
+   * Empreinte officielle du fichier, si Kali en publie une : essaie plusieurs conventions vues sur
+   * leurs serveurs (un fichier `<archive>.sha512sum`/`.sha256sum` à côté de l'archive, sinon un
+   * fichier récapitulatif `SHA512SUMS`/`SHA256SUMS` dans le même dossier). `null` si aucune de ces
+   * conventions ne répond (ça arrive : leurs serveurs ne publient pas toujours ce fichier) — dans
+   * ce cas l'appelant installe quand même, sans cette vérification supplémentaire.
    */
-  private fun empreinteAttendue(base: String, fichier: String): Pair<String, String> {
+  private fun empreinteAttendue(base: String, fichier: String): Pair<String, String>? {
     fun motEmpreinte(texte: String) =
       Regex("""\b[0-9a-fA-F]{64,128}\b""").find(texte)?.value?.lowercase()
 
@@ -201,7 +215,7 @@ internal object Linux {
       val trouve = ligne?.let { motEmpreinte(it) }
       if (trouve != null) return algo to trouve
     }
-    throw IOException("Empreinte officielle de $fichier introuvable sur le serveur de Kali. Réessaie plus tard.")
+    return null
   }
 
   private fun empreinte(algo: String, f: File): String {
@@ -288,6 +302,21 @@ internal object Linux {
   }
 
   // ---------- Outils ----------
+
+  /** Le serveur répond-il (200-299) pour cette URL ? Sans télécharger le contenu (HEAD). */
+  private fun urlExiste(url: String): Boolean {
+    val cnx = URL(url).openConnection() as HttpURLConnection
+    cnx.requestMethod = "HEAD"
+    cnx.connectTimeout = 15_000
+    cnx.readTimeout = 15_000
+    return try {
+      cnx.responseCode in 200..299
+    } catch (ignore: Exception) {
+      false
+    } finally {
+      cnx.disconnect()
+    }
+  }
 
   /** Lit un petit fichier texte, avec des délais d'attente (réseau mobile instable). */
   private fun lireTexte(url: String): String {
