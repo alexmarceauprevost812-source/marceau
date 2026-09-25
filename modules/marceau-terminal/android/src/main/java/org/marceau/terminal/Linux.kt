@@ -137,11 +137,14 @@ internal object Linux {
     val arch = archKali()
     val base = "https://kali.download/nethunter-images/current/rootfs"
     progression("Recherche du fichier sur le serveur de Kali…", 0)
-    // « minimal » d'abord (le plus petit) ; « full » si Kali ne le propose plus pour cette
-    // architecture — Kali a déjà changé ce nom de fichier par le passé.
-    val fichier = listOf("minimal", "full")
-      .map { edition -> "kali-nethunter-rootfs-$edition-$arch.tar.xz" }
-      .firstOrNull { candidat -> urlExiste("$base/$candidat") }
+    // « minimal » d'abord (le plus petit) ; « full » (bien plus gros) seulement si Kali répond
+    // clairement « fichier absent » (404) pour « minimal » — jamais sur une simple panne réseau
+    // (coupure, délai dépassé…), qui lancerait sinon un téléchargement bien plus gros que prévu.
+    fun candidat(edition: String): String? {
+      val nom = "kali-nethunter-rootfs-$edition-$arch.tar.xz"
+      return if (urlExisteVraiment("$base/$nom")) nom else null
+    }
+    val fichier = candidat("minimal") ?: candidat("full")
       ?: throw IOException("Aucun rootfs Kali trouvé pour cette architecture ($arch) sur le serveur officiel. Réessaie plus tard.")
 
     progression("Vérification de l'empreinte officielle…", 0)
@@ -348,16 +351,23 @@ internal object Linux {
 
   // ---------- Outils ----------
 
-  /** Le serveur répond-il (200-299) pour cette URL ? Sans télécharger le contenu (HEAD). */
-  private fun urlExiste(url: String): Boolean {
+  /**
+   * Le fichier existe-t-il vraiment (HEAD, sans télécharger le contenu) ? `true` pour 200-299,
+   * `false` seulement pour un 404 (Kali dit clairement « ce fichier n'existe pas »). Toute autre
+   * panne (coupure réseau, délai dépassé, erreur serveur…) est relancée comme une vraie erreur —
+   * jamais traitée comme « n'existe pas », ce qui déclencherait à tort un repli sur un fichier
+   * bien plus gros (« full ») à la moindre instabilité du réseau mobile.
+   */
+  private fun urlExisteVraiment(url: String): Boolean {
     val cnx = URL(url).openConnection() as HttpURLConnection
     cnx.requestMethod = "HEAD"
     cnx.connectTimeout = 15_000
     cnx.readTimeout = 15_000
-    return try {
-      cnx.responseCode in 200..299
-    } catch (ignore: Exception) {
-      false
+    try {
+      val code = cnx.responseCode
+      if (code in 200..299) return true
+      if (code == 404) return false
+      throw IOException("Réponse inattendue du serveur de Kali (HTTP $code)")
     } finally {
       cnx.disconnect()
     }
