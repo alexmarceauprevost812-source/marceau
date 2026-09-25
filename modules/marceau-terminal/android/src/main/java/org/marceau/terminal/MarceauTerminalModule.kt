@@ -90,7 +90,9 @@ class MarceauTerminalModule : Module() {
     }
 
     // ---------- Option 4 : Linux ----------
-    Function("outilsLinux") { Linux.outilsInstalles(ctx) }
+    // AsyncFunction (pas Function) : lit et analyse dpkg/status et apt/extended_states, qui
+    // peuvent être volumineux (surtout avec l'édition « full ») — ne doit pas bloquer le pont JS.
+    AsyncFunction("outilsLinux") { Linux.outilsInstalles(ctx) }
 
     AsyncFunction("installerLinux") { promise: Promise ->
       thread(name = "installation-linux") {

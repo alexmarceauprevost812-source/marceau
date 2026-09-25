@@ -121,14 +121,24 @@ export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
       { text: 'Supprimer', style: 'destructive', onPress: () => setCommandes((l) => l.filter((x) => x.id !== cmd.id)) },
     ]);
 
-  // Relue à chaque ouverture : un outil vient peut-être d'être installé.
+  // Relue à chaque ouverture : un outil vient peut-être d'être installé. Asynchrone (lit et
+  // analyse dpkg/status et apt/extended_states côté natif) : ne bloque pas l'affichage.
   useEffect(() => {
-    if (!visible) return;
-    try {
-      setOutils(Terminal?.outilsLinux() ?? []);
-    } catch {
+    if (!visible || !Terminal) {
       setOutils([]);
+      return;
     }
+    let annule = false;
+    Terminal.outilsLinux()
+      .then((liste) => {
+        if (!annule) setOutils(liste);
+      })
+      .catch(() => {
+        if (!annule) setOutils([]);
+      });
+    return () => {
+      annule = true;
+    };
   }, [visible]);
 
   // Migration Alpine → Kali : les boutons de départ (« maj », « chercher »…) enregistrés par une
