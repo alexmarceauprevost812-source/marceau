@@ -94,7 +94,9 @@ const COMMANDES_DE_DEPART: Commande[] = [
  */
 export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
   const [outils, setOutils] = useState<string[]>([]);
-  const [commandes, setCommandes, commandesChargees] = usePersistant<Commande[]>(
+  // usePersistant renvoie « chargement » (true tant que la lecture du fichier n'est pas finie,
+  // false une fois fait) : le nom reflète bien ce sens ici, contrairement à la tentative précédente.
+  const [commandes, setCommandes, chargementCommandes] = usePersistant<Commande[]>(
     'marceau:commandes-linux',
     COMMANDES_DE_DEPART,
   );
@@ -133,10 +135,11 @@ export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
   // version précédente de l'appli lancaient encore « apk » (ne marche plus, le Linux est Kali
   // maintenant). On les remet à jour vers leur équivalent « apt », sans toucher aux boutons que
   // la personne a ajoutés elle-même (identifiants différents, jamais générés par nouvelId() ici).
-  // On attend que usePersistant ait fini de lire le fichier enregistré (commandesChargees) : avant
-  // ça, `commandes` vaut encore la valeur de départ, et migrer dessus ne migrerait jamais rien.
+  // On attend que usePersistant ait fini de lire le fichier enregistré (chargementCommandes
+  // repasse à false) : avant ça, `commandes` vaut encore la valeur de départ, et migrer dessus
+  // ne migrerait jamais rien.
   useEffect(() => {
-    if (!commandesChargees) return;
+    if (chargementCommandes) return;
     setCommandes((liste) => {
       let modifie = false;
       const migree = liste.map((cmd) => {
@@ -150,7 +153,7 @@ export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
       return modifie ? migree : liste;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commandesChargees]);
+  }, [chargementCommandes]);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onFermer} statusBarTranslucent>
