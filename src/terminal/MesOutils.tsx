@@ -126,6 +126,26 @@ export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
     }
   }, [visible]);
 
+  // Migration Alpine → Kali : les boutons de départ (« maj », « chercher »…) enregistrés par une
+  // version précédente de l'appli lancaient encore « apk » (ne marche plus, le Linux est Kali
+  // maintenant). On les remet à jour vers leur équivalent « apt », sans toucher aux boutons que
+  // la personne a ajoutés elle-même (identifiants différents, jamais générés par nouvelId() ici).
+  useEffect(() => {
+    setCommandes((liste) => {
+      let modifie = false;
+      const migree = liste.map((cmd) => {
+        const parDefaut = COMMANDES_DE_DEPART.find((d) => d.id === cmd.id);
+        if (parDefaut && cmd.commande !== parDefaut.commande && /\bapk\b/.test(cmd.commande)) {
+          modifie = true;
+          return { ...cmd, commande: parDefaut.commande };
+        }
+        return cmd;
+      });
+      return modifie ? migree : liste;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onFermer} statusBarTranslucent>
       <SafeAreaView style={[styles.flex, { backgroundColor: c.fond }]}>

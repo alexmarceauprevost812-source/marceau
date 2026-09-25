@@ -45,7 +45,10 @@ internal object Linux {
 
   /**
    * Outils installés avec « apt install » : les paquets dpkg présents maintenant, moins
-   * l'instantané des paquets déjà là juste après l'installation du rootfs (paquets de base).
+   * l'instantané des paquets déjà là juste après l'installation du rootfs (paquets de base),
+   * moins les paquets qu'APT a installés lui-même comme DÉPENDANCES (« Auto-Installed » dans
+   * extended_states) — sinon installer un seul outil comme nmap remplirait la liste avec ses
+   * bibliothèques (libpcap…), qui ne sont pas des commandes à lancer.
    * Contrairement à une liste figée, ça reste juste même si Kali change ses paquets de base.
    */
   fun outilsInstalles(ctx: Context): List<String> {
@@ -56,7 +59,8 @@ internal object Linux {
     } catch (ignore: Exception) {
       emptySet()
     }
-    return paquetsDpkg(racine).filterNot { it in base }.sorted()
+    val auto = paquetsAutoInstalles(racine)
+    return paquetsDpkg(racine).filterNot { it in base || it in auto }.sorted()
   }
 
   /** Paquets marqués « installés » dans /var/lib/dpkg/status (nom seulement, sans version). */
@@ -79,6 +83,32 @@ internal object Linux {
       }
     }
     cloreEntree() // dpkg ne met pas toujours une ligne vide après la dernière entrée
+    return paquets
+  }
+
+  /**
+   * Paquets qu'APT a installés lui-même comme dépendances (« Auto-Installed: 1 » dans
+   * /var/lib/apt/extended_states) — jamais des outils demandés explicitement par la personne.
+   */
+  private fun paquetsAutoInstalles(racine: File): Set<String> {
+    val fichier = File(racine, "var/lib/apt/extended_states")
+    if (!fichier.canRead()) return emptySet()
+    val paquets = mutableSetOf<String>()
+    var nom: String? = null
+    var auto = false
+    fun cloreEntree() {
+      if (auto) nom?.let { paquets += it }
+      nom = null
+      auto = false
+    }
+    fichier.forEachLine { ligne ->
+      when {
+        ligne.startsWith("Package: ") -> { nom = ligne.removePrefix("Package: ").trim() }
+        ligne.startsWith("Auto-Installed: ") -> auto = ligne.removePrefix("Auto-Installed: ").trim() == "1"
+        ligne.isBlank() -> cloreEntree()
+      }
+    }
+    cloreEntree()
     return paquets
   }
 
