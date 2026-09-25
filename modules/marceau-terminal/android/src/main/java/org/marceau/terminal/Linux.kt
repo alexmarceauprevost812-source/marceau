@@ -112,13 +112,20 @@ internal object Linux {
     return paquets
   }
 
-  /** Architecture Debian/Kali correspondant au téléphone. */
+  /**
+   * Architecture Debian/Kali correspondant au téléphone. Kali NetHunter ne publie de rootfs
+   * qu'en ARM (téléphones/tablettes) : un appareil x86/x86_64 (rare, surtout des émulateurs)
+   * n'a rien à télécharger — mieux vaut le dire clairement que de laisser échouer une recherche
+   * de fichier qui ne trouvera jamais rien.
+   */
   private fun archKali(): String =
     when (Build.SUPPORTED_ABIS.firstOrNull()) {
       "arm64-v8a" -> "arm64"
       "armeabi-v7a" -> "armhf"
-      "x86_64" -> "amd64"
-      "x86" -> "i386"
+      "x86_64", "x86" -> throw IOException(
+        "Kali NetHunter ne publie pas de Linux intégré pour les processeurs x86 (ton téléphone : " +
+          "${Build.SUPPORTED_ABIS.firstOrNull()}) — seulement pour les processeurs ARM (la grande majorité des téléphones).",
+      )
       else -> throw IOException("Processeur non pris en charge : ${Build.SUPPORTED_ABIS.joinToString()}")
     }
 
@@ -141,32 +148,40 @@ internal object Linux {
     val verif = empreinteAttendue(base, fichier)
 
     val archive = File(ctx.cacheDir, fichier)
-    telecharger("$base/$fichier", archive) { p -> progression("Téléchargement de Kali Linux…", p) }
-
-    progression("Vérification du fichier…", 100)
-    if (verif != null) {
-      val (algo, empreinteAttendue) = verif
-      if (empreinte(algo, archive) != empreinteAttendue) {
-        archive.delete()
-        throw IOException("Le fichier de Kali téléchargé est corrompu ou modifié (empreinte $algo différente). Réessaie.")
-      }
-    }
-    // Kali ne publie pas toujours d'empreinte à côté de ce fichier (constaté sur leurs serveurs) :
-    // dans ce cas on continue sans cette vérification supplémentaire — le téléchargement passe
-    // quand même par une connexion chiffrée (HTTPS) vers le serveur officiel de Kali.
-
-    progression("Installation des fichiers (ça prend un moment)…", 100)
-    val racine = racine(ctx)
     val temporaire = File(dossier(ctx), "racine-tmp")
-    supprimerSansSuivre(temporaire)
-    temporaire.mkdirs()
-    extraireTarXz(archive, temporaire)
+    // Si une étape échoue (disque plein, coupure réseau…), on efface ce qu'on a commencé à
+    // écrire — l'archive téléchargée ET le rootfs à moitié extrait — pour ne pas laisser
+    // plusieurs centaines de Mo inutiles, surtout gênants quand la panne vient d'un disque plein.
+    try {
+      telecharger("$base/$fichier", archive) { p -> progression("Téléchargement de Kali Linux…", p) }
+
+      progression("Vérification du fichier…", 100)
+      if (verif != null) {
+        val (algo, empreinteAttendue) = verif
+        if (empreinte(algo, archive) != empreinteAttendue) {
+          throw IOException("Le fichier de Kali téléchargé est corrompu ou modifié (empreinte $algo différente). Réessaie.")
+        }
+      }
+      // Kali ne publie pas toujours d'empreinte à côté de ce fichier (constaté sur leurs serveurs) :
+      // dans ce cas on continue sans cette vérification supplémentaire — le téléchargement passe
+      // quand même par une connexion chiffrée (HTTPS) vers le serveur officiel de Kali.
+
+      progression("Installation des fichiers (ça prend un moment)…", 100)
+      supprimerSansSuivre(temporaire)
+      temporaire.mkdirs()
+      extraireTarXz(archive, temporaire)
+
+      File(temporaire, MARQUEUR).writeText(fichier)
+      File(temporaire, PAQUETS_BASE).writeText(paquetsDpkg(temporaire).sorted().joinToString("\n"))
+      ecrireConfig(temporaire)
+    } catch (e: Exception) {
+      archive.delete()
+      supprimerSansSuivre(temporaire)
+      throw e
+    }
     archive.delete()
 
-    File(temporaire, MARQUEUR).writeText(fichier)
-    File(temporaire, PAQUETS_BASE).writeText(paquetsDpkg(temporaire).sorted().joinToString("\n"))
-    ecrireConfig(temporaire)
-
+    val racine = racine(ctx)
     supprimerSansSuivre(racine)
     if (!temporaire.renameTo(racine)) throw IOException("Impossible de finaliser l'installation")
   }
