@@ -16,7 +16,7 @@ import kotlin.concurrent.thread
  *  - « Téléphone » : shell Android (option 1)
  *  - « Termux »    : commandes envoyées à l'appli Termux (option 2)
  *  - « SSH »       : terminal vers un ordinateur (option 3)
- *  - « Linux »     : Alpine Linux intégré avec PRoot (option 4)
+ *  - « Linux »     : Kali Linux intégré (rootfs officiel NetHunter) avec PRoot (option 4)
  */
 class MarceauTerminalModule : Module() {
   private val sessions = ConcurrentHashMap<String, Session>()

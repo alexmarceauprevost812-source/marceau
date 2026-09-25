@@ -29,7 +29,7 @@ const SECTIONS: Section[] = [
       { cmd: 'mkdir test', quoi: 'Créer un dossier' },
       { cmd: 'touch fichier.txt', quoi: 'Créer un fichier vide' },
       { cmd: 'cat fichier.txt', quoi: "Afficher le contenu d'un fichier" },
-      { cmd: 'apk add nano', quoi: "Installer l'éditeur nano (une seule fois)" },
+      { cmd: 'apt install nano', quoi: "Installer l'éditeur nano (une seule fois)" },
       { cmd: 'nano fichier.txt', quoi: 'Éditer un fichier une fois nano installé (Ctrl+O enregistre, Ctrl+X quitte)' },
       { cmd: 'cp a b', quoi: 'Copier a vers b' },
       { cmd: 'mv a b', quoi: 'Déplacer ou renommer a en b' },
@@ -39,19 +39,19 @@ const SECTIONS: Section[] = [
   {
     titre: '📦 Installer des outils',
     commandes: [
-      { cmd: 'apk update', quoi: 'Mettre à jour la liste (au début, une fois)' },
-      { cmd: 'apk add nmap', quoi: 'Installer un outil (jamais « sudo »)' },
-      { cmd: 'apk search mot', quoi: 'Chercher un outil' },
-      { cmd: 'apk info', quoi: 'Voir ce qui est installé' },
+      { cmd: 'apt update', quoi: 'Mettre à jour la liste (au début, une fois)' },
+      { cmd: 'apt install nmap', quoi: 'Installer un outil (jamais « sudo »)' },
+      { cmd: 'apt search mot', quoi: 'Chercher un outil' },
+      { cmd: 'dpkg -l', quoi: 'Voir ce qui est installé' },
     ],
   },
   {
     titre: '🧰 Outils sûrs pour apprendre (sur TON réseau)',
     commandes: [
-      { cmd: 'apk add nmap', quoi: 'Voir les appareils de ton réseau : nmap 192.168.1.0/24' },
-      { cmd: 'apk add tcpdump', quoi: 'Observer le trafic réseau' },
-      { cmd: 'apk add python3 git', quoi: 'Programmer et récupérer du code' },
-      { cmd: 'apk add curl', quoi: 'Tester un site ou une API' },
+      { cmd: 'apt install nmap', quoi: 'Voir les appareils de ton réseau : nmap 192.168.1.0/24' },
+      { cmd: 'apt install tcpdump', quoi: 'Observer le trafic réseau' },
+      { cmd: 'apt install python3 git', quoi: 'Programmer et récupérer du code' },
+      { cmd: 'apt install curl', quoi: 'Tester un site ou une API' },
     ],
   },
   {

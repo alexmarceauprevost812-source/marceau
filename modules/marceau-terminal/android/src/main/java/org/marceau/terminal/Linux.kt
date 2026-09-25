@@ -13,15 +13,20 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.zip.GZIPInputStream
+import org.tukaani.xz.XZInputStream
 import java.security.MessageDigest
 
 /**
- * Option 4 : un vrai petit Linux (Alpine) dans l'appli, lancé avec PRoot.
- * `apk add python3 git nodejs…` fonctionne ensuite comme sur un ordinateur.
+ * Option 4 : un vrai petit Linux — le rootfs officiel **Kali NetHunter** — dans l'appli,
+ * lancé avec PRoot. `apt install python3 git nodejs…` fonctionne ensuite comme sur un ordinateur,
+ * avec les outils de sécurité de Kali directement dans les dépôts officiels.
  */
 internal object Linux {
   private const val MARQUEUR = ".marceau-installe"
+  /** Préfixe du fichier attendu dans le marqueur : distingue un Kali installé d'un ancien Alpine
+   *  (versions précédentes de l'appli) qu'il faut réinstaller entièrement. */
+  private const val PREFIXE_MARQUEUR = "kalifs-"
+  private const val PAQUETS_BASE = ".marceau-paquets-base"
 
   private fun dossier(ctx: Context) = File(ctx.filesDir, "linux")
   private fun racine(ctx: Context) = File(dossier(ctx), "racine")
@@ -31,123 +36,136 @@ internal object Linux {
   fun prootDisponible(ctx: Context) =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && natif(ctx, "libproot.so").exists()
 
-  fun installe(ctx: Context) = File(racine(ctx), MARQUEUR).exists()
-
-  /** Paquets de base d'Alpine : ce ne sont pas des outils ajoutés par la personne. */
-  private val BASE = setOf("alpine-base", "alpine-baselayout", "alpine-baselayout-data", "alpine-keys",
-    "alpine-release", "apk-tools", "busybox", "busybox-binsh", "libc-utils", "musl", "musl-utils", "scanelf",
-    "ssl_client", "ca-certificates-bundle", "zlib", "libcrypto3", "libssl3")
-
-  /**
-   * Outils installés avec « apk add » : la liste /etc/apk/world d'Alpine (paquets demandés,
-   * sans leurs dépendances), sans les paquets de base ni les contraintes de version.
-   */
-  fun outilsInstalles(ctx: Context): List<String> {
-    val world = File(racine(ctx), "etc/apk/world")
-    if (!installe(ctx) || !world.canRead()) return emptyList()
-    return world.readLines()
-      .map { it.trim().split(Regex("[<>=~@]"))[0] }
-      .filter { it.isNotEmpty() && it !in BASE }
-      .distinct()
-      .sorted()
+  /** Installé ET c'est bien un rootfs Kali (un ancien Alpine encore présent est traité comme non installé). */
+  fun installe(ctx: Context): Boolean {
+    val marqueur = File(racine(ctx), MARQUEUR)
+    if (!marqueur.exists()) return false
+    return try { marqueur.readText().trim().startsWith(PREFIXE_MARQUEUR) } catch (ignore: Exception) { false }
   }
 
-  /** Architecture Alpine correspondant au téléphone. */
-  private fun archAlpine(): String =
+  /**
+   * Outils installés avec « apt install » : les paquets dpkg présents maintenant, moins
+   * l'instantané des paquets déjà là juste après l'installation du rootfs (paquets de base).
+   * Contrairement à une liste figée, ça reste juste même si Kali change ses paquets de base.
+   */
+  fun outilsInstalles(ctx: Context): List<String> {
+    if (!installe(ctx)) return emptyList()
+    val racine = racine(ctx)
+    val base = try {
+      File(racine, PAQUETS_BASE).readLines().toSet()
+    } catch (ignore: Exception) {
+      emptySet()
+    }
+    return paquetsDpkg(racine).filterNot { it in base }.sorted()
+  }
+
+  /** Paquets marqués « installés » dans /var/lib/dpkg/status (nom seulement, sans version). */
+  private fun paquetsDpkg(racine: File): Set<String> {
+    val fichier = File(racine, "var/lib/dpkg/status")
+    if (!fichier.canRead()) return emptySet()
+    val paquets = mutableSetOf<String>()
+    var nom: String? = null
+    var installe = false
+    fun cloreEntree() {
+      if (installe) nom?.let { paquets += it }
+      nom = null
+      installe = false
+    }
+    fichier.forEachLine { ligne ->
+      when {
+        ligne.startsWith("Package: ") -> { nom = ligne.removePrefix("Package: ").trim() }
+        ligne.startsWith("Status: ") -> installe = ligne.contains("install ok installed")
+        ligne.isBlank() -> cloreEntree()
+      }
+    }
+    cloreEntree() // dpkg ne met pas toujours une ligne vide après la dernière entrée
+    return paquets
+  }
+
+  /** Architecture Debian/Kali correspondant au téléphone. */
+  private fun archKali(): String =
     when (Build.SUPPORTED_ABIS.firstOrNull()) {
-      "arm64-v8a" -> "aarch64"
-      "armeabi-v7a" -> "armv7"
-      "x86_64" -> "x86_64"
-      "x86" -> "x86"
+      "arm64-v8a" -> "arm64"
+      "armeabi-v7a" -> "armhf"
+      "x86_64" -> "amd64"
+      "x86" -> "i386"
       else -> throw IOException("Processeur non pris en charge : ${Build.SUPPORTED_ABIS.joinToString()}")
     }
 
-  /** Télécharge et installe Alpine Linux (environ 4 Mo). */
+  /** Télécharge et installe le rootfs minimal officiel de Kali NetHunter (plusieurs centaines de Mo). */
   fun installer(ctx: Context, progression: (String, Int) -> Unit) {
     if (!prootDisponible(ctx)) {
       throw IOException("Le Linux intégré demande Android 8 ou plus récent, et PRoot inclus dans l'APK (voir scripts/construire-linux.sh).")
     }
-    val arch = archAlpine()
-    val base = "https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/$arch"
-    progression("Recherche de la dernière version d'Alpine…", 0)
-    val yaml = lireTexte("$base/latest-releases.yaml")
-    // Le fichier et son empreinte SHA-256 (le « sha256: » qui suit « file: » dans la même entrée).
-    val trouve = Regex("""file:\s*(alpine-minirootfs-[^\s]+\.tar\.gz)[\s\S]*?sha256:\s*([0-9a-fA-F]{64})""").find(yaml)
-      ?: throw IOException("Version d'Alpine introuvable")
-    val fichier = trouve.groupValues[1]
-    val empreinte = trouve.groupValues[2].lowercase()
+    val arch = archKali()
+    val base = "https://kali.download/nethunter-images/current/rootfs"
+    val fichier = "kalifs-$arch-minimal.tar.xz"
+
+    progression("Vérification de l'empreinte officielle…", 0)
+    val (algo, empreinteAttendue) = empreinteAttendue(base, fichier)
 
     val archive = File(ctx.cacheDir, fichier)
-    telecharger("$base/$fichier", archive) { p -> progression("Téléchargement d'Alpine…", p) }
+    telecharger("$base/$fichier", archive) { p -> progression("Téléchargement de Kali Linux…", p) }
 
     progression("Vérification du fichier…", 100)
-    if (sha256(archive) != empreinte) {
+    if (empreinte(algo, archive) != empreinteAttendue) {
       archive.delete()
-      throw IOException("Le fichier d'Alpine téléchargé est corrompu ou modifié (empreinte SHA-256 différente). Réessaie.")
+      throw IOException("Le fichier de Kali téléchargé est corrompu ou modifié (empreinte $algo différente). Réessaie.")
     }
 
-    progression("Installation des fichiers…", 100)
+    progression("Installation des fichiers (ça prend un moment)…", 100)
     val racine = racine(ctx)
     val temporaire = File(dossier(ctx), "racine-tmp")
     supprimerSansSuivre(temporaire)
     temporaire.mkdirs()
-    extraireTarGz(archive, temporaire)
+    extraireTarXz(archive, temporaire)
     archive.delete()
 
     File(temporaire, MARQUEUR).writeText(fichier)
-    ecrireConfig(temporaire, fichier)
+    File(temporaire, PAQUETS_BASE).writeText(paquetsDpkg(temporaire).sorted().joinToString("\n"))
+    ecrireConfig(temporaire)
 
     supprimerSansSuivre(racine)
     if (!temporaire.renameTo(racine)) throw IOException("Impossible de finaliser l'installation")
   }
 
   /** Numéro de la configuration écrite : on met à jour un ancien Linux quand ce numéro change. */
-  private const val VERSION_CONFIG = 1
+  private const val VERSION_CONFIG = 2
   private const val MARQUEUR_CONFIG = ".marceau-config"
 
-  /** Branche du dépôt correspondant à la version installée, ex. « v3.22 » (et non « latest-stable »
-   *  qui bougerait vers une nouvelle version incompatible avec le rootfs déjà en place). */
-  private fun brancheAlpine(fichier: String): String {
-    val v = Regex("""alpine-minirootfs-(\d+)\.(\d+)""").find(fichier)
-    return if (v != null) "v${v.groupValues[1]}.${v.groupValues[2]}" else "latest-stable"
-  }
-
-  /** Écrit DNS, dépôts (épinglés) et la commande d'aide « outils » dans un rootfs. */
-  private fun ecrireConfig(racine: File, fichier: String) {
+  /** Écrit DNS, dépôts et la commande d'aide « outils » dans un rootfs Kali. */
+  private fun ecrireConfig(racine: File) {
     File(racine, "etc").mkdirs()
     File(racine, "etc/resolv.conf").apply { delete() }.writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n")
     File(racine, "root").mkdirs()
 
-    // Dépôts Alpine complets (main + community) : des milliers d'outils installables à la
-    // demande avec « apk add » (nmap, python3, git, nodejs, hydra, john…). Épinglés à la
-    // version installée pour éviter une mise à niveau partielle vers une nouvelle version.
-    val branche = brancheAlpine(fichier)
-    File(racine, "etc/apk").mkdirs()
-    File(racine, "etc/apk/repositories").writeText(
-      "https://dl-cdn.alpinelinux.org/alpine/$branche/main\n" +
-        "https://dl-cdn.alpinelinux.org/alpine/$branche/community\n",
+    // Dépôts officiels de Kali (rolling release : pas de branche à épingler comme sur Alpine).
+    File(racine, "etc/apt").mkdirs()
+    File(racine, "etc/apt/sources.list").writeText(
+      "deb https://http.kali.org/kali kali-rolling main non-free non-free-firmware contrib\n",
     )
 
     File(racine, "etc/profile.d").mkdirs()
     File(racine, "etc/profile.d/marceau.sh").writeText(
       """
-      |export PS1='\[\e[38;5;208m\]linux\[\e[0m\]:\w \$ '
+      |# Couleurs du terminal de Marceau : nom d'utilisateur en vert lime, le reste en blanc.
+      |export PS1='\[\e[38;2;166;255;0m\]\u\[\e[38;2;255;255;255m\]@kali:\w\$ \[\e[0m\]'
       |alias ll='ls -la'
       |# « outils » : rappelle comment installer des outils (tu choisis, tu télécharges).
       |outils() {
-      |  echo 'Installe un outil avec :  apk add <nom>   (ex. apk add nmap)'
-      |  echo 'Mets à jour la liste des paquets une fois :  apk update'
+      |  echo 'Installe un outil avec :  apt install <nom>   (ex. apt install nmap)'
+      |  echo 'Mets à jour la liste des paquets une fois :  apt update'
       |  echo
-      |  echo 'Réseau      : nmap tcpdump netcat-openbsd bind-tools curl wget'
+      |  echo 'Réseau      : nmap tcpdump netcat-traditional dnsutils curl wget'
       |  echo 'Mots de passe: john hashcat hydra'
       |  echo 'Wi-Fi       : aircrack-ng wireless-tools'
       |  echo 'Web         : nikto sqlmap whatweb'
-      |  echo 'Programmation: python3 py3-pip git nodejs npm gcc make'
+      |  echo 'Programmation: python3 python3-pip git nodejs npm gcc make'
       |  echo
-      |  echo 'Cherche un paquet :  apk search <mot>'
+      |  echo 'Cherche un paquet :  apt search <mot>'
       |  echo 'Sers-toi de ces outils uniquement sur TES appareils/réseaux ou avec autorisation écrite.'
       |}
-      |echo 'Bienvenue dans Linux. Tape  outils  pour voir comment installer des programmes.'
+      |echo 'Bienvenue dans Kali Linux. Tape  outils  pour voir comment installer des programmes.'
       |""".trimMargin() + "\n",
     )
     File(racine, MARQUEUR_CONFIG).writeText(VERSION_CONFIG.toString())
@@ -158,12 +176,36 @@ internal object Linux {
     val racine = racine(ctx)
     val marqueur = File(racine, MARQUEUR_CONFIG)
     if (marqueur.exists() && marqueur.readText().trim() == VERSION_CONFIG.toString()) return
-    val fichier = try { File(racine, MARQUEUR).readText().trim() } catch (ignore: Exception) { "" }
-    try { ecrireConfig(racine, fichier) } catch (ignore: Exception) {}
+    try { ecrireConfig(racine) } catch (ignore: Exception) {}
   }
 
-  private fun sha256(f: File): String {
-    val md = MessageDigest.getInstance("SHA-256")
+  /**
+   * Empreinte officielle du fichier : essaie plusieurs conventions utilisées par les serveurs de
+   * Kali (un fichier `<archive>.sha512sum`/`.sha256sum` à côté de l'archive, sinon un fichier
+   * récapitulatif `SHA512SUMS`/`SHA256SUMS` dans le même dossier). Renvoie l'algorithme utilisé.
+   */
+  private fun empreinteAttendue(base: String, fichier: String): Pair<String, String> {
+    fun motEmpreinte(texte: String) =
+      Regex("""\b[0-9a-fA-F]{64,128}\b""").find(texte)?.value?.lowercase()
+
+    for ((suffixe, algo) in listOf(".sha512sum" to "SHA-512", ".sha256sum" to "SHA-256")) {
+      val trouve = try { motEmpreinte(lireTexte("$base/$fichier$suffixe")) } catch (ignore: Exception) { null }
+      if (trouve != null) return algo to trouve
+    }
+    for ((nom, algo) in listOf("SHA512SUMS" to "SHA-512", "SHA256SUMS" to "SHA-256")) {
+      val ligne = try {
+        lireTexte("$base/$nom").lines().firstOrNull { it.contains(fichier) }
+      } catch (ignore: Exception) {
+        null
+      }
+      val trouve = ligne?.let { motEmpreinte(it) }
+      if (trouve != null) return algo to trouve
+    }
+    throw IOException("Empreinte officielle de $fichier introuvable sur le serveur de Kali. Réessaie plus tard.")
+  }
+
+  private fun empreinte(algo: String, f: File): String {
+    val md = MessageDigest.getInstance(algo)
     f.inputStream().use { entree ->
       val tampon = ByteArray(64 * 1024)
       while (true) {
@@ -239,7 +281,8 @@ internal object Linux {
       "COLORTERM=truecolor",
       "LANG=C.UTF-8",
       "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-      "/bin/sh", "-l",
+      // bash (shell par défaut de Kali) : historique et édition de ligne, contrairement à dash (/bin/sh).
+      "/bin/bash", "-l",
     )
     return Triple(proot, args, env.toTypedArray())
   }
@@ -252,7 +295,7 @@ internal object Linux {
     cnx.connectTimeout = 20_000
     cnx.readTimeout = 30_000
     try {
-      if (cnx.responseCode != 200) throw IOException("Serveur d'Alpine injoignable (HTTP ${cnx.responseCode})")
+      if (cnx.responseCode != 200) throw IOException("Serveur de Kali injoignable (HTTP ${cnx.responseCode})")
       return cnx.inputStream.bufferedReader().use { it.readText() }
     } finally {
       cnx.disconnect()
@@ -335,9 +378,9 @@ internal object Linux {
     return File(dest, propre)
   }
 
-  /** Extrait une archive .tar.gz en gardant liens symboliques et permissions. */
-  private fun extraireTarGz(archive: File, dest: File) {
-    GZIPInputStream(BufferedInputStream(FileInputStream(archive), 64 * 1024)).use { entree ->
+  /** Extrait une archive .tar.xz en gardant liens symboliques et permissions. */
+  private fun extraireTarXz(archive: File, dest: File) {
+    XZInputStream(BufferedInputStream(FileInputStream(archive), 64 * 1024)).use { entree ->
       val entete = ByteArray(512)
       var nomPax: String? = null
       var lienPax: String? = null
