@@ -216,8 +216,8 @@ internal object Linux {
     File(racine, "etc/profile.d").mkdirs()
     File(racine, "etc/profile.d/marceau.sh").writeText(
       """
-      |# Couleurs du terminal de Marceau : nom d'utilisateur en vert lime, le reste en blanc.
-      |export PS1='\[\e[38;2;166;255;0m\]\u\[\e[38;2;255;255;255m\]@kali:\w\$ \[\e[0m\]'
+      |# Couleurs du terminal de Marceau : « kali » en vert lime, le reste (dont « root ») en blanc.
+      |export PS1='\[\e[38;2;255;255;255m\]\u@\[\e[38;2;166;255;0m\]kali\[\e[38;2;255;255;255m\]:\w\$ \[\e[0m\]'
       |alias ll='ls -la'
       |# « outils » : rappelle que tout est déjà installé (édition complète de Kali).
       |outils() {
