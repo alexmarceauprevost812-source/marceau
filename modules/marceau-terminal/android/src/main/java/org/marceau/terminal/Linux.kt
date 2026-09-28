@@ -137,24 +137,28 @@ internal object Linux {
     }
 
   /**
-   * Télécharge et installe le rootfs officiel de Kali NetHunter, édition « full » : tous les
-   * outils de sécurité de Kali déjà installés (plusieurs Go — mieux vaut être en Wi-Fi).
+   * Télécharge et installe le rootfs officiel de Kali NetHunter.
+   *
+   * @param editionVoulue « minimal » (léger, rapide — on ajoute les outils avec « apt install »)
+   *   ou « full » (tous les outils de Kali déjà installés, mais plusieurs Go à télécharger).
+   *   La personne choisit sur l'écran d'installation, comme on choisit un fournisseur d'IA.
    */
-  fun installer(ctx: Context, progression: (String, Int) -> Unit) {
+  fun installer(ctx: Context, editionVoulue: String, progression: (String, Int) -> Unit) {
     if (!prootDisponible(ctx)) {
       throw IOException("Le Linux intégré demande Android 8 ou plus récent, et PRoot inclus dans l'APK (voir scripts/construire-linux.sh).")
     }
     val arch = archKali()
     val base = "https://kali.download/nethunter-images/current/rootfs"
     progression("Recherche du fichier sur le serveur de Kali…", 0)
-    // « full » d'abord (tous les outils déjà installés) ; « minimal » seulement si Kali répond
-    // clairement « fichier absent » (404) pour « full » sur cette architecture — jamais sur une
-    // simple panne réseau (coupure, délai dépassé…), qui basculerait sinon vers l'édition minimale.
+    // On prend l'édition demandée ; on ne se rabat sur l'autre que si Kali répond clairement
+    // « fichier absent » (404) pour celle-ci sur cette architecture — jamais sur une simple panne
+    // réseau (coupure, délai dépassé…).
     fun candidat(edition: String): String? {
       val nom = "kali-nethunter-rootfs-$edition-$arch.tar.xz"
       return if (urlExisteVraiment("$base/$nom")) nom else null
     }
-    val fichier = candidat("full") ?: candidat("minimal")
+    val autre = if (editionVoulue == "full") "minimal" else "full"
+    val fichier = candidat(editionVoulue) ?: candidat(autre)
       ?: throw IOException("Aucun rootfs Kali trouvé pour cette architecture ($arch) sur le serveur officiel. Réessaie plus tard.")
 
     progression("Vérification de l'empreinte officielle…", 0)

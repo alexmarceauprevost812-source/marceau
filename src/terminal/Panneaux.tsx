@@ -196,11 +196,11 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
   }
 
   if (!infos.linuxInstalle) {
-    const installer = async () => {
+    const installer = async (edition: 'minimal' | 'full') => {
       setErreur('');
       setInstallation({ etape: 'Préparation…', pourcent: 0 });
       try {
-        await Terminal!.installerLinux();
+        await Terminal!.installerLinux(edition);
         rafraichir();
       } catch (e) {
         setErreur((e as Error).message);
@@ -212,16 +212,31 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
       <Info
         couleurs={c}
         titre="Un vrai Kali Linux dans ton téléphone"
-        texte="Marceau installe le rootfs officiel de Kali Linux (NetHunter, édition complète — plusieurs Go à télécharger, mieux vaut être en Wi-Fi et avoir de la place). Les outils de sécurité de Kali y sont déjà installés (Python, Git, Node.js, nmap, hydra, aircrack-ng, sqlmap, wireshark…). Si Kali ne propose pas l'édition complète pour ton téléphone, c'est l'édition allégée qui est installée et tu ajoutes les outils avec « apt install ». Tape « outils » dans le terminal pour un rappel. Le bouton « 📖 Commandes » ouvre l'aide, et « 📦 Catalogue Kali » le catalogue officiel des outils."
+        texte="Choisis quelle version de Kali installer. Tu pourras toujours ajouter des outils plus tard avec « apt install ». Mieux vaut être en Wi-Fi."
       >
-        {installation && (
+        {installation ? (
           <Text style={[styles.corps, { color: c.texte }]}>
             {installation.etape}
             {installation.pourcent > 0 && installation.pourcent < 100 ? ` ${installation.pourcent} %` : ''}
           </Text>
+        ) : (
+          <>
+            <Text style={[styles.corps, { color: c.texte, fontWeight: '700' }]}>🪶 Léger (recommandé)</Text>
+            <Text style={[styles.corps, { color: c.texteDoux }]}>
+              Rapide à télécharger (petit). Tu ajoutes les outils dont tu as besoin avec « apt install nom » (nmap,
+              hydra, sqlmap…). Idéal si ta connexion ou ton espace de stockage sont limités.
+            </Text>
+            <Bouton couleurs={c} libelle="Installer la version légère" onPress={() => installer('minimal')} />
+
+            <Text style={[styles.corps, { color: c.texte, fontWeight: '700', marginTop: 8 }]}>🧰 Complète (tout Kali)</Text>
+            <Text style={[styles.corps, { color: c.texteDoux }]}>
+              Tous les outils de sécurité déjà installés. ⚠️ Plusieurs Go à télécharger et beaucoup d'espace : à
+              réserver au Wi-Fi et à un téléphone avec de la place libre.
+            </Text>
+            <Bouton couleurs={c} libelle="Installer Kali complet (gros)" secondaire onPress={() => installer('full')} />
+          </>
         )}
         {!!erreur && <Text style={[styles.corps, { color: c.danger }]}>Échec : {erreur}</Text>}
-        <Bouton couleurs={c} libelle={installation ? 'Installation…' : 'Installer Linux'} onPress={installer} desactive={!!installation} />
       </Info>
     );
   }
