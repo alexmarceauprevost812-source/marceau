@@ -19,8 +19,12 @@ import type { Couleurs } from '../theme';
  * Une étape d'un guide : la commande à lancer, ce qu'elle fait, et ce que ça t'apprend pour
  * mieux te protéger. Le but est éducatif et DÉFENSIF : on comprend comment ça marche sur SES
  * propres appareils/réseaux, justement pour savoir s'en protéger.
+ *
+ * `cible: true` = la commande contient une adresse d'exemple (IP, site) à remplacer par la tienne.
+ * Dans ce cas, « Lancer » la TAPE dans le terminal SANS appuyer sur Entrée : tu remplaces l'adresse
+ * puis tu appuies toi-même sur Entrée.
  */
-type Etape = { commande: string; quoi: string; pourquoi: string };
+type Etape = { commande: string; quoi: string; pourquoi: string; cible?: boolean };
 
 /** Un guide : un objectif, et les étapes à suivre une par une pour y arriver. */
 type Guide = { id: string; icone: string; titre: string; but: string; etapes: Etape[] };
@@ -38,8 +42,8 @@ const GUIDES: Guide[] = [
     etapes: [
       { commande: 'apt install -y nmap', quoi: 'Installe nmap, l’outil qui explore un réseau.', pourquoi: 'C’est l’outil de base pour voir ce qui est visible sur ton réseau.' },
       { commande: 'ip addr', quoi: 'Affiche l’adresse IP de ton appareil (ex. 192.168.1.23).', pourquoi: 'Tu en déduis la plage de ton réseau (ex. 192.168.1.0/24) pour l’étape suivante.' },
-      { commande: 'nmap -sn 192.168.1.0/24', quoi: 'Liste les appareils allumés sur ton réseau (remplace par TA plage).', pourquoi: 'Tu vois tout ce qui est connecté chez toi — un appareil inconnu peut être suspect.' },
-      { commande: 'nmap 192.168.1.1', quoi: 'Regarde les ports ouverts de ta box/routeur (remplace par SON IP).', pourquoi: 'Un port ouvert inutile = une porte d’entrée. Tu sais quoi fermer dans ta box.' },
+      { commande: 'nmap -sn 192.168.1.0/24', quoi: 'Liste les appareils allumés sur ton réseau.', pourquoi: 'Tu vois tout ce qui est connecté chez toi — un appareil inconnu peut être suspect.', cible: true },
+      { commande: 'nmap 192.168.1.1', quoi: 'Regarde les ports ouverts de ta box/routeur.', pourquoi: 'Un port ouvert inutile = une porte d’entrée. Tu sais quoi fermer dans ta box.', cible: true },
     ],
   },
   {
@@ -59,8 +63,8 @@ const GUIDES: Guide[] = [
     but: 'Comprendre ce qu’un site révèle sur lui-même (serveur, technologies), pour mieux configurer le tien.',
     etapes: [
       { commande: 'apt install -y curl whatweb', quoi: 'Installe curl et whatweb.', pourquoi: 'Ce sont les outils pour inspecter un site sans rien casser.' },
-      { commande: 'curl -I https://example.com', quoi: 'Affiche les en-têtes HTTP d’un site (remplace par TON site).', pourquoi: 'Les en-têtes révèlent le serveur et des réglages de sécurité manquants à corriger.' },
-      { commande: 'whatweb https://example.com', quoi: 'Devine les technologies utilisées par un site (remplace par le TIEN).', pourquoi: 'Savoir ce que ton site expose t’aide à cacher les infos inutiles aux attaquants.' },
+      { commande: 'curl -I https://example.com', quoi: 'Affiche les en-têtes HTTP d’un site.', pourquoi: 'Les en-têtes révèlent le serveur et des réglages de sécurité manquants à corriger.', cible: true },
+      { commande: 'whatweb https://example.com', quoi: 'Devine les technologies utilisées par un site.', pourquoi: 'Savoir ce que ton site expose t’aide à cacher les infos inutiles aux attaquants.', cible: true },
     ],
   },
   {
@@ -90,22 +94,31 @@ const GUIDES: Guide[] = [
 type Props = {
   visible: boolean;
   couleurs: Couleurs;
+  /** Guide ouvert (son id) ou null pour la liste. Géré par le parent pour garder la progression. */
+  guideId: string | null;
+  /** Étape en cours dans le guide ouvert. Gérée par le parent pour la même raison. */
+  etape: number;
+  onGuide: (id: string | null) => void;
+  onEtape: (n: number) => void;
   onFermer: () => void;
-  /** Lance une commande dans le terminal Linux (la tape puis Entrée). */
-  onLancer: (commande: string) => void;
+  /**
+   * Lance une commande dans le terminal Linux. `executer` vrai = tape la commande PUIS Entrée ;
+   * faux = la tape seulement (pour que la personne remplace une adresse d'exemple avant d'valider).
+   */
+  onLancer: (commande: string, executer: boolean) => void;
 };
 
 /**
  * Guide pas à pas : panneau qui glisse depuis la DROITE. On choisit un objectif, puis on avance
  * étape par étape ; chaque étape explique la commande et ce qu’elle t’apprend pour te protéger.
+ * Quand on lance une commande, le panneau se ferme pour laisser voir le terminal ; la progression
+ * est conservée (elle vit dans le parent), donc on reprend au même endroit en rouvrant.
  */
-export function GuidePasAPas({ visible, couleurs: c, onFermer, onLancer }: Props) {
+export function GuidePasAPas({ visible, couleurs: c, guideId, etape, onGuide, onEtape, onFermer, onLancer }: Props) {
   const { width } = useWindowDimensions();
   const largeur = Math.min(360, width * 0.9);
   const anim = useRef(new Animated.Value(0)).current;
   const [monte, setMonte] = useState(visible);
-  const [guide, setGuide] = useState<Guide | null>(null);
-  const [etape, setEtape] = useState(0);
 
   useEffect(() => {
     if (visible) setMonte(true);
@@ -115,19 +128,20 @@ export function GuidePasAPas({ visible, couleurs: c, onFermer, onLancer }: Props
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (finished && !visible) {
-        setMonte(false);
-        setGuide(null);
-        setEtape(0);
-      }
+      if (finished && !visible) setMonte(false);
     });
   }, [visible, anim]);
 
   if (!monte) return null;
 
-  const ouvrirGuide = (g: Guide) => {
-    setGuide(g);
-    setEtape(0);
+  const guide = GUIDES.find((g) => g.id === guideId) ?? null;
+  const etapeSure = guide ? Math.min(etape, guide.etapes.length - 1) : 0;
+
+  // Lance l'étape : si elle contient une adresse d'exemple, on la tape sans Entrée (à modifier) ;
+  // sinon on l'exécute directement. Dans les deux cas on ferme le panneau pour voir le terminal.
+  const lancer = (e: Etape) => {
+    onLancer(e.commande, !e.cible);
+    onFermer();
   };
 
   return (
@@ -149,7 +163,7 @@ export function GuidePasAPas({ visible, couleurs: c, onFermer, onLancer }: Props
         <SafeAreaView edges={['top', 'bottom', 'right']} style={styles.flex}>
           <View style={[styles.entete, { borderColor: c.bordure }]}>
             {guide ? (
-              <Pressable onPress={() => setGuide(null)} hitSlop={12} accessibilityRole="button">
+              <Pressable onPress={() => onGuide(null)} hitSlop={12} accessibilityRole="button">
                 <Text style={[styles.lien, { color: c.accentTexte }]}>‹ Guides</Text>
               </Pressable>
             ) : (
@@ -172,7 +186,10 @@ export function GuidePasAPas({ visible, couleurs: c, onFermer, onLancer }: Props
               {GUIDES.map((g) => (
                 <Pressable
                   key={g.id}
-                  onPress={() => ouvrirGuide(g)}
+                  onPress={() => {
+                    onGuide(g.id);
+                    onEtape(0);
+                  }}
                   accessibilityRole="button"
                   style={({ pressed }) => [styles.carte, { backgroundColor: c.carte, borderColor: c.bordure, opacity: pressed ? 0.7 : 1 }]}
                 >
@@ -196,40 +213,52 @@ export function GuidePasAPas({ visible, couleurs: c, onFermer, onLancer }: Props
                 {guide.icone} {guide.titre}
               </Text>
               <Text style={[styles.progression, { color: c.accentTexte }]}>
-                Étape {etape + 1} sur {guide.etapes.length}
+                Étape {etapeSure + 1} sur {guide.etapes.length}
               </Text>
 
               <View style={[styles.etape, { backgroundColor: c.carte, borderColor: c.accent }]}>
                 <Text selectable style={[styles.commande, { color: c.accentTexte }]}>
-                  {guide.etapes[etape].commande}
+                  {guide.etapes[etapeSure].commande}
                 </Text>
-                <Text style={[styles.quoi, { color: c.texte }]}>{guide.etapes[etape].quoi}</Text>
+                <Text style={[styles.quoi, { color: c.texte }]}>{guide.etapes[etapeSure].quoi}</Text>
                 <Text style={[styles.pourquoi, { color: c.texteDoux }]}>
-                  🛡️ Pour te protéger : {guide.etapes[etape].pourquoi}
+                  🛡️ Pour te protéger : {guide.etapes[etapeSure].pourquoi}
                 </Text>
+                {guide.etapes[etapeSure].cible && (
+                  <Text style={[styles.pourquoi, { color: c.accentTexte }]}>
+                    ✏️ Cette commande contient une adresse d’exemple. En touchant « Lancer », elle s’écrit dans le
+                    terminal sans être validée : remplace l’adresse par la TIENNE, puis appuie sur Entrée.
+                  </Text>
+                )}
                 <Pressable
-                  onPress={() => onLancer(guide.etapes[etape].commande)}
+                  onPress={() => lancer(guide.etapes[etapeSure])}
                   accessibilityRole="button"
                   style={({ pressed }) => [styles.lancer, { backgroundColor: c.accent, opacity: pressed ? 0.8 : 1 }]}
                 >
-                  <Text style={{ color: c.surAccent, fontWeight: '800' }}>▶ Lancer cette commande</Text>
+                  <Text style={{ color: c.surAccent, fontWeight: '800' }}>
+                    {guide.etapes[etapeSure].cible ? '✏️ Écrire dans le terminal' : '▶ Lancer cette commande'}
+                  </Text>
                 </Pressable>
+                <Text style={[styles.astuce, { color: c.texteDoux }]}>
+                  Le guide se ferme pour te laisser voir le résultat. Rouvre-le (bouton 🧭 Guide) pour l’étape
+                  suivante — tu reviendras ici même.
+                </Text>
               </View>
 
-              {etape + 1 < guide.etapes.length ? (
+              {etapeSure + 1 < guide.etapes.length ? (
                 <>
-                  <Text style={[styles.suivantTitre, { color: c.texteDoux }]}>Ensuite :</Text>
+                  <Text style={[styles.suivantTitre, { color: c.texteDoux }]}>Étape suivante :</Text>
                   <Pressable
-                    onPress={() => setEtape((n) => n + 1)}
+                    onPress={() => onEtape(etapeSure + 1)}
                     accessibilityRole="button"
                     style={({ pressed }) => [styles.suivant, { backgroundColor: c.carte, borderColor: c.bordure, opacity: pressed ? 0.7 : 1 }]}
                   >
                     <View style={styles.flex}>
                       <Text numberOfLines={1} style={[styles.commande, { color: c.texte }]}>
-                        {guide.etapes[etape + 1].commande}
+                        {guide.etapes[etapeSure + 1].commande}
                       </Text>
                       <Text numberOfLines={2} style={[styles.quoi, { color: c.texteDoux }]}>
-                        {guide.etapes[etape + 1].quoi}
+                        {guide.etapes[etapeSure + 1].quoi}
                       </Text>
                     </View>
                     <Text style={[styles.fleche, { color: c.accentTexte }]}>→</Text>
@@ -241,8 +270,8 @@ export function GuidePasAPas({ visible, couleurs: c, onFermer, onLancer }: Props
                 </Text>
               )}
 
-              {etape > 0 && (
-                <Pressable onPress={() => setEtape((n) => n - 1)} accessibilityRole="button" style={styles.retour}>
+              {etapeSure > 0 && (
+                <Pressable onPress={() => onEtape(etapeSure - 1)} accessibilityRole="button" style={styles.retour}>
                   <Text style={[styles.lien, { color: c.texteDoux }]}>‹ Étape précédente</Text>
                 </Pressable>
               )}
@@ -285,6 +314,7 @@ const styles = StyleSheet.create({
   quoi: { fontSize: 14, lineHeight: 20 },
   pourquoi: { fontSize: 13, lineHeight: 19, fontStyle: 'italic' },
   lancer: { paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 2 },
+  astuce: { fontSize: 12, lineHeight: 17 },
   suivantTitre: { fontSize: 13, fontWeight: '700', marginTop: 4 },
   suivant: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
   fleche: { fontSize: 20, fontWeight: '800' },

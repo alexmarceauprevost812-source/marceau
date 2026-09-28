@@ -249,8 +249,14 @@ function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
   const [aide, setAide] = useState(false);
   const [outils, setOutils] = useState(false);
   const [guide, setGuide] = useState(false);
-  // Tape une commande dans la session Linux (id « linux ») puis Entrée.
-  const lancer = (commande: string) => Terminal?.ecrire('linux', `${commande}\r`).catch(() => {});
+  // Progression du guide gardée ici (pas dans le panneau) : elle survit à la fermeture du panneau,
+  // donc en rouvrant le guide on reprend au même objectif et à la même étape.
+  const [guideId, setGuideId] = useState<string | null>(null);
+  const [guideEtape, setGuideEtape] = useState(0);
+  // Tape une commande dans la session Linux (id « linux ») ; avec Entrée par défaut, sans Entrée
+  // si executer=false (pour laisser remplacer une adresse d'exemple avant de valider).
+  const lancer = (commande: string, executer = true) =>
+    Terminal?.ecrire('linux', executer ? `${commande}\r` : commande).catch(() => {});
   return (
     <View style={styles.flex}>
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
@@ -261,7 +267,16 @@ function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
       </View>
       <SessionPty couleurs={c} type="linux" />
       <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
-      <GuidePasAPas visible={guide} couleurs={c} onFermer={() => setGuide(false)} onLancer={lancer} />
+      <GuidePasAPas
+        visible={guide}
+        couleurs={c}
+        guideId={guideId}
+        etape={guideEtape}
+        onGuide={(id) => setGuideId(id)}
+        onEtape={(n) => setGuideEtape(n)}
+        onFermer={() => setGuide(false)}
+        onLancer={lancer}
+      />
       <MesOutils
         visible={outils}
         couleurs={c}
