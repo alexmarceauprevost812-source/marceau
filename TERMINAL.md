@@ -3,7 +3,7 @@
 L'écran **Terminal** (menu ☰ → `>_`, ou Bureau → Terminal) a quatre onglets :
 
 - **Téléphone** : le shell d'Android (`/system/bin/sh`), sur un vrai pseudo-terminal. Dossier de travail : `maison`.
-- **Linux** : le rootfs officiel **Kali NetHunter** (minimal), lancé avec PRoot. Bouton « Installer Linux » (quelques centaines de Mo, mieux vaut être en Wi-Fi), puis `apt install python3 git nodejs nano`. Les fichiers de l'onglet Téléphone sont dans `/telephone`.
+- **Linux** : le rootfs officiel **Kali NetHunter**, édition **complète** (tous les outils de sécurité déjà installés), lancé avec PRoot. Bouton « Installer Linux » (plusieurs Go, mieux vaut être en Wi-Fi). Les fichiers de l'onglet Téléphone sont dans `/telephone`.
 - **Termux** : envoie les commandes à l'appli Termux (F-Droid). Prérequis dans Termux :
   `echo 'allow-external-apps = true' >> ~/.termux/termux.properties`, puis fermer et rouvrir Termux.
   Commandes non interactives seulement (ex. `pkg install -y python`) ; bouton « Ouvrir Termux » pour vim, htop…
