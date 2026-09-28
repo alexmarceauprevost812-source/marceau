@@ -198,9 +198,25 @@ internal object Linux {
       // dans ce cas on continue sans cette vérification supplémentaire — le téléchargement passe
       // quand même par une connexion chiffrée (HTTPS) vers le serveur officiel de Kali.
 
-      progression("Installation des fichiers (ça prend un moment)…", 100)
+      progression("Installation des fichiers…", 1)
       temporaire.mkdirs()
-      extraireTarXz(archive, temporaire)
+      extraireTarXz(archive, temporaire) { pourcent, nomFichier ->
+        // Affiche le fichier en cours d'installation + le pourcentage, comme un terminal qui
+        // déballe les paquets (l'écran ne reste plus figé pendant la décompression).
+        progression("Installation des fichiers…  $nomFichier", pourcent)
+      }
+
+      // Vérifie que l'extraction a bien produit un Kali utilisable (un shell est présent) AVANT de
+      // finaliser : sinon l'installation « réussirait » silencieusement mais installe() la jugerait
+      // inutilisable, et l'écran reviendrait aux boutons sans expliquer pourquoi. Un shell manquant
+      // vient presque toujours d'une extraction incomplète (place disque épuisée, appli interrompue).
+      if (cheminShell(temporaire) == null) {
+        throw IOException(
+          "L'installation s'est arrêtée avant la fin (fichiers incomplets). C'est presque toujours " +
+            "un manque d'espace de stockage : libère de la place (Réglages → Stockage), garde l'appli " +
+            "ouverte à l'écran pendant l'installation, puis réessaie.",
+        )
+      }
 
       File(temporaire, MARQUEUR).writeText(fichier)
       File(temporaire, PAQUETS_BASE).writeText(paquetsDpkg(temporaire).sorted().joinToString("\n"))
@@ -525,9 +541,19 @@ internal object Linux {
     return File(dest, propre)
   }
 
-  /** Extrait une archive .tar.xz en gardant liens symboliques et permissions. */
-  private fun extraireTarXz(archive: File, dest: File) {
-    XZInputStream(BufferedInputStream(FileInputStream(archive), 64 * 1024)).use { entree ->
+  /**
+   * Extrait une archive .tar.xz en gardant liens symboliques et permissions.
+   * `progression(pourcent, nomFichier)` est appelée régulièrement pendant la décompression pour
+   * montrer que ça avance (pourcentage) et quel fichier s'installe — comme un vrai terminal qui
+   * déballe les paquets, au lieu d'un écran figé pendant plusieurs minutes.
+   */
+  private fun extraireTarXz(archive: File, dest: File, progression: (Int, String) -> Unit) {
+    // On compte les octets COMPRESSÉS lus dans l'archive : le rapport avec sa taille totale donne
+    // un pourcentage fiable, sans connaître d'avance la taille décompressée.
+    val total = archive.length().coerceAtLeast(1)
+    val compteur = CompteurFlux(FileInputStream(archive))
+    var dernierAffichage = 0L
+    XZInputStream(BufferedInputStream(compteur, 64 * 1024)).use { entree ->
       val entete = ByteArray(512)
       var nomPax: String? = null
       var lienPax: String? = null
@@ -563,6 +589,15 @@ internal object Linux {
         lienPax?.let { lien = it }
         nomPax = null
         lienPax = null
+
+        // Fait défiler l'avancement (pourcentage + fichier en cours), sans inonder le pont JS :
+        // au plus une fois toutes les ~120 ms.
+        val maintenant = System.currentTimeMillis()
+        if (maintenant - dernierAffichage >= 120) {
+          dernierAffichage = maintenant
+          val pourcent = (compteur.lus * 100 / total).toInt().coerceIn(1, 99)
+          progression(pourcent, nom.trimEnd('/').takeLast(48))
+        }
 
         val cible = cheminSur(dest, nom)
         if (cible == null) {
@@ -611,5 +646,25 @@ internal object Linux {
         }
       }
     }
+  }
+
+  /** Flux qui compte les octets lus (pour afficher la progression de la décompression). */
+  private class CompteurFlux(private val source: InputStream) : InputStream() {
+    var lus: Long = 0L
+      private set
+
+    override fun read(): Int {
+      val o = source.read()
+      if (o >= 0) lus++
+      return o
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+      val n = source.read(b, off, len)
+      if (n > 0) lus += n
+      return n
+    }
+
+    override fun close() = source.close()
   }
 }
