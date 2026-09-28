@@ -168,6 +168,13 @@ internal object Linux {
     // disque en même temps, et c'est justement ce qui ferait échouer le nouveau téléchargement
     // sur un téléphone à court d'espace.
     supprimerSansSuivre(temporaire)
+    // Un rootfs déjà présent mais INUTILISABLE (abîmé/sans shell, ou un ancien Alpine) n'a aucune
+    // valeur et occupe pourtant plusieurs Go : on le libère AVANT de télécharger le remplacement,
+    // sinon la réinstallation pourrait échouer faute de place sur un téléphone plein. On ne touche
+    // jamais à un rootfs utilisable — mais un rootfs utilisable n'amène pas jusqu'ici (l'écran
+    // « Installer Linux » ne s'affiche que pour un Linux absent ou inutilisable).
+    val racine = racine(ctx)
+    if (racine.exists() && !installe(ctx)) supprimerSansSuivre(racine)
     // Si une étape échoue (disque plein, coupure réseau…), on efface ce qu'on a commencé à
     // écrire — l'archive téléchargée ET le rootfs à moitié extrait — pour ne pas laisser
     // plusieurs Go inutiles, surtout gênants quand la panne vient justement d'un disque plein.
@@ -199,7 +206,8 @@ internal object Linux {
     }
     archive.delete()
 
-    val racine = racine(ctx)
+    // Efface un éventuel reste (rootfs utilisable réinstallé, ou course avec une autre tentative)
+    // juste avant le renommage, pour que racine soit bien vide.
     supprimerSansSuivre(racine)
     if (!temporaire.renameTo(racine)) throw IOException("Impossible de finaliser l'installation")
   }
