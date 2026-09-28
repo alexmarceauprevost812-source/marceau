@@ -34,7 +34,8 @@ type Evenements = {
 type ModuleNatif = {
   infos(): InfosTerminal;
   ouvrirTelephone(id: string, colonnes: number, lignes: number): Promise<void>;
-  installerLinux(): Promise<void>;
+  /** Installe le Linux : « minimal » (léger) ou « full » (tous les outils, plusieurs Go). */
+  installerLinux(edition: 'minimal' | 'full'): Promise<void>;
   supprimerLinux(): Promise<void>;
   ouvrirLinux(id: string, colonnes: number, lignes: number): Promise<void>;
   /** Outils installés dans le Linux avec « apt install » (sans les paquets de base). */

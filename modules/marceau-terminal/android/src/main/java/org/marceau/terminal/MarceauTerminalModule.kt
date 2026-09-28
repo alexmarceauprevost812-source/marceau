@@ -94,10 +94,10 @@ class MarceauTerminalModule : Module() {
     // peuvent être volumineux (surtout avec l'édition « full ») — ne doit pas bloquer le pont JS.
     AsyncFunction("outilsLinux") { Linux.outilsInstalles(ctx) }
 
-    AsyncFunction("installerLinux") { promise: Promise ->
+    AsyncFunction("installerLinux") { edition: String, promise: Promise ->
       thread(name = "installation-linux") {
         try {
-          Linux.installer(ctx) { etape, pourcent ->
+          Linux.installer(ctx, edition) { etape, pourcent ->
             sendEvent("onLinux", mapOf("etape" to etape, "pourcent" to pourcent))
           }
           promise.resolve(null)

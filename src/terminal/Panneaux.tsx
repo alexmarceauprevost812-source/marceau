@@ -20,6 +20,7 @@ import type { Couleurs } from '../theme';
 import { usePersistant } from '../hooks/usePersistant';
 import { AideLinux } from './AideLinux';
 import { BarreTouches } from './BarreTouches';
+import { GuidePasAPas } from './GuidePasAPas';
 import { MesOutils } from './MesOutils';
 import { VueTerminal, type PoigneeTerminal, type Theme } from './VueTerminal';
 
@@ -117,11 +118,26 @@ function Console({
 // Options 1 et 4 : shell du téléphone et Linux (PRoot), sur un vrai PTY
 // ---------------------------------------------------------------------------
 
-function SessionPty({ couleurs, type }: { couleurs: Couleurs; type: 'telephone' | 'linux' }) {
+/** Injecte une commande dans une session ; renvoie false si la session était fermée (rouverte). */
+type Injecteur = (commande: string, executer: boolean) => boolean;
+
+function SessionPty({
+  couleurs,
+  type,
+  injecterRef,
+}: {
+  couleurs: Couleurs;
+  type: 'telephone' | 'linux';
+  /** Le parent y reçoit de quoi injecter une commande (boutons Guide / Mes outils). */
+  injecterRef?: React.MutableRefObject<Injecteur | null>;
+}) {
   const terminal = useRef<PoigneeTerminal>(null);
   const id = type;
   const taille = useRef({ c: 80, l: 24 });
   const [terminee, setTerminee] = useState(false);
+  // Miroir de `terminee` lisible sans re-créer l'injecteur (évite d'envoyer dans un shell fermé).
+  const termineeRef = useRef(false);
+  termineeRef.current = terminee;
 
   const ouvrir = useCallback(async () => {
     if (!Terminal) return;
@@ -135,6 +151,26 @@ function SessionPty({ couleurs, type }: { couleurs: Couleurs; type: 'telephone' 
       setTerminee(true);
     }
   }, [id, type]);
+
+  // Expose au parent un injecteur : si le shell est fermé, on le relance et on n'envoie PAS la
+  // commande (elle serait perdue) — la personne retouche le bouton une fois le shell revenu.
+  useEffect(() => {
+    if (!injecterRef) return;
+    injecterRef.current = (commande, executer) => {
+      if (termineeRef.current || !Terminal) {
+        ouvrir();
+        return false;
+      }
+      // On efface d'abord ce que la personne avait commencé à taper (sinon la commande
+      // injectée se collerait au bout) : Ctrl+E va en fin de ligne, Ctrl+U efface toute la ligne.
+      const nettoyer = '\x05\x15';
+      Terminal.ecrire(id, nettoyer + (executer ? `${commande}\r` : commande)).catch(() => {});
+      return true;
+    };
+    return () => {
+      injecterRef.current = null;
+    };
+  }, [injecterRef, id, ouvrir]);
 
   useSession(id, terminal, (code) => {
     setTerminee(true);
@@ -195,11 +231,11 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
   }
 
   if (!infos.linuxInstalle) {
-    const installer = async () => {
+    const installer = async (edition: 'minimal' | 'full') => {
       setErreur('');
       setInstallation({ etape: 'Préparation…', pourcent: 0 });
       try {
-        await Terminal!.installerLinux();
+        await Terminal!.installerLinux(edition);
         rafraichir();
       } catch (e) {
         setErreur((e as Error).message);
@@ -211,16 +247,31 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
       <Info
         couleurs={c}
         titre="Un vrai Kali Linux dans ton téléphone"
-        texte="Marceau installe le rootfs officiel de Kali Linux (NetHunter, édition complète — plusieurs Go à télécharger, mieux vaut être en Wi-Fi et avoir de la place). Les outils de sécurité de Kali y sont déjà installés (Python, Git, Node.js, nmap, hydra, aircrack-ng, sqlmap, wireshark…). Si Kali ne propose pas l'édition complète pour ton téléphone, c'est l'édition allégée qui est installée et tu ajoutes les outils avec « apt install ». Tape « outils » dans le terminal pour un rappel. Le bouton « 📖 Commandes » ouvre l'aide, et « 📦 Catalogue Kali » le catalogue officiel des outils."
+        texte="Choisis quelle version de Kali installer. Tu pourras toujours ajouter des outils plus tard avec « apt install ». Mieux vaut être en Wi-Fi."
       >
-        {installation && (
+        {installation ? (
           <Text style={[styles.corps, { color: c.texte }]}>
             {installation.etape}
             {installation.pourcent > 0 && installation.pourcent < 100 ? ` ${installation.pourcent} %` : ''}
           </Text>
+        ) : (
+          <>
+            <Text style={[styles.corps, { color: c.texte, fontWeight: '700' }]}>🪶 Léger (recommandé)</Text>
+            <Text style={[styles.corps, { color: c.texteDoux }]}>
+              Rapide à télécharger (petit). Tu ajoutes les outils dont tu as besoin avec « apt install nom » (nmap,
+              hydra, sqlmap…). Idéal si ta connexion ou ton espace de stockage sont limités.
+            </Text>
+            <Bouton couleurs={c} libelle="Installer la version légère" onPress={() => installer('minimal')} />
+
+            <Text style={[styles.corps, { color: c.texte, fontWeight: '700', marginTop: 8 }]}>🧰 Complète (tout Kali)</Text>
+            <Text style={[styles.corps, { color: c.texteDoux }]}>
+              Tous les outils de sécurité déjà installés. ⚠️ Plusieurs Go à télécharger et beaucoup d'espace : à
+              réserver au Wi-Fi et à un téléphone avec de la place libre.
+            </Text>
+            <Bouton couleurs={c} libelle="Installer Kali complet (gros)" secondaire onPress={() => installer('full')} />
+          </>
         )}
         {!!erreur && <Text style={[styles.corps, { color: c.danger }]}>Échec : {erreur}</Text>}
-        <Bouton couleurs={c} libelle={installation ? 'Installation…' : 'Installer Linux'} onPress={installer} desactive={!!installation} />
       </Info>
     );
   }
@@ -232,23 +283,44 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
 function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
   const [aide, setAide] = useState(false);
   const [outils, setOutils] = useState(false);
+  const [guide, setGuide] = useState(false);
+  // Progression du guide gardée ici (pas dans le panneau) : elle survit à la fermeture du panneau,
+  // donc en rouvrant le guide on reprend au même objectif et à la même étape.
+  const [guideId, setGuideId] = useState<string | null>(null);
+  const [guideEtape, setGuideEtape] = useState(0);
+  // La session Linux expose ici de quoi injecter une commande. Si le shell est fermé, l'injecteur
+  // le relance et renvoie false (la commande n'est pas envoyée dans le vide).
+  const injecter = useRef<Injecteur | null>(null);
+  // Tape une commande dans la session Linux ; avec Entrée par défaut, sans Entrée si executer=false
+  // (pour laisser remplacer une adresse d'exemple avant de valider).
+  const lancer = (commande: string, executer = true) => injecter.current?.(commande, executer) ?? false;
   return (
     <View style={styles.flex}>
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
+        <Bouton couleurs={c} libelle="🧭 Guide" compact secondaire onPress={() => setGuide(true)} />
         <Bouton couleurs={c} libelle="🧰 Mes outils" compact secondaire onPress={() => setOutils(true)} />
         <Bouton couleurs={c} libelle="📖 Commandes" compact secondaire onPress={() => setAide(true)} />
         <Bouton couleurs={c} libelle="📦 Catalogue Kali" compact secondaire onPress={() => Linking.openURL(LIEN_CATALOGUE)} />
       </View>
-      <SessionPty couleurs={c} type="linux" />
+      <SessionPty couleurs={c} type="linux" injecterRef={injecter} />
       <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
+      <GuidePasAPas
+        visible={guide}
+        couleurs={c}
+        guideId={guideId}
+        etape={guideEtape}
+        onGuide={(id) => setGuideId(id)}
+        onEtape={(n) => setGuideEtape(n)}
+        onFermer={() => setGuide(false)}
+        onLancer={lancer}
+      />
       <MesOutils
         visible={outils}
         couleurs={c}
         onFermer={() => setOutils(false)}
         onLancer={(o) => {
           setOutils(false);
-          // Même session que SessionPty (id « linux ») : on tape le nom de l'outil puis Entrée.
-          Terminal?.ecrire('linux', `${o}\r`).catch(() => {});
+          lancer(o);
         }}
       />
     </View>
