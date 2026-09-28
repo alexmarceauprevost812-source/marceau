@@ -161,7 +161,10 @@ function SessionPty({
         ouvrir();
         return false;
       }
-      Terminal.ecrire(id, executer ? `${commande}\r` : commande).catch(() => {});
+      // On efface d'abord ce que la personne avait commencé à taper (sinon la commande
+      // injectée se collerait au bout) : Ctrl+E va en fin de ligne, Ctrl+U efface toute la ligne.
+      const nettoyer = '\x05\x15';
+      Terminal.ecrire(id, nettoyer + (executer ? `${commande}\r` : commande)).catch(() => {});
       return true;
     };
     return () => {
