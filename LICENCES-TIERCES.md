@@ -14,12 +14,15 @@ est aussi dans l'appli : **Bureau → Licences**.
 | JSch (fork mwiede) | 0.2.20 | BSD-3-Clause | [licences/jsch.txt](licences/jsch.txt) | https://github.com/mwiede/jsch |
 | Bouncy Castle | 1.78.1 | MIT | [licences/bouncycastle.txt](licences/bouncycastle.txt) | https://www.bouncycastle.org |
 | xterm.js + addon-fit | voir package.json | MIT | [licences/xterm.txt](licences/xterm.txt) | https://github.com/xtermjs/xterm.js |
+| XZ for Java | 1.9 | Domaine public | [licences/xz-java.txt](licences/xz-java.txt) | https://tukaani.org/xz/java.html |
 
 PRoot, talloc et libandroid-shmem sont **compilés à partir de leur code source**, sans modification, par
 [scripts/construire-linux.sh](scripts/construire-linux.sh). Leur code source exact est publié avec chaque
 version de l'APK sur GitHub (`marceau-sources-linux.tar.gz`), comme l'exigent la GPL et la LGPL.
 
-Alpine Linux n'est pas inclus dans l'APK : le téléphone le télécharge directement depuis les serveurs d'Alpine.
+Le rootfs de Kali Linux (NetHunter, minimal) n'est pas inclus dans l'APK : le téléphone le télécharge
+directement depuis les serveurs officiels de Kali (kali.download), avec vérification de l'empreinte avant
+installation quand Kali en publie une pour ce fichier.
 
 ## Bibliothèques JavaScript
 

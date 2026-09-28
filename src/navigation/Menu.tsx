@@ -19,7 +19,7 @@ export const SECTIONS: { cle: Section; icone: string; libelle: string }[] = [
 
 /** Liens utiles ouverts dans le navigateur (documentation, catalogues…). */
 export const LIENS: { url: string; icone: string; libelle: string }[] = [
-  { url: 'https://pkgs.alpinelinux.org/packages', icone: '📦', libelle: 'Catalogue Alpine (outils installables)' },
+  { url: 'https://www.kali.org/tools/', icone: '📦', libelle: 'Catalogue Kali (outils installables)' },
 ];
 
 const MenuCtx = createContext<{ ouvrirMenu: () => void; ouvrirBureau: () => void } | null>(null);

@@ -78,6 +78,15 @@ const NATIFS = [
     source: 'https://github.com/xtermjs/xterm.js',
     textes: ['licences/xterm.txt'],
   },
+  {
+    nom: 'XZ for Java',
+    version: '1.9',
+    licence: 'Domaine public',
+    role: 'Décompresse le rootfs Kali (.tar.xz) lors de l’installation du Linux intégré',
+    auteurs: 'Lasse Collin, Tukaani project',
+    source: 'https://tukaani.org/xz/java.html',
+    textes: ['licences/xz-java.txt'],
+  },
 ].map((c) => ({ ...c, texte: c.textes.map(texte).join('\n\n' + '─'.repeat(40) + '\n\n') }));
 
 // Bibliothèques JavaScript : dépendances de production, récursivement.
