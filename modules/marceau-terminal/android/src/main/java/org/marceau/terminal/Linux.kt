@@ -326,12 +326,15 @@ internal object Linux {
    * une image « usrmerge » (Debian/Kali récent), /bin est un lien vers /usr/bin, donc le fichier
    * réel est dans usr/bin.
    */
+  // Chaque candidat renvoie le chemin (vu du Linux) qui pointe vers CE fichier précis : si le shell
+  // est dans usr/bin, on renvoie /usr/bin/… — jamais /bin/…, qui ne résout que si le lien
+  // usrmerge /bin → /usr/bin est intact (pas garanti sur un rootfs abîmé).
   private val SHELLS = listOf(
-    "usr/bin/bash" to "/bin/bash",
+    "usr/bin/bash" to "/usr/bin/bash",
     "bin/bash" to "/bin/bash",
-    "usr/bin/dash" to "/bin/sh",
-    "bin/dash" to "/bin/sh",
-    "usr/bin/sh" to "/bin/sh",
+    "usr/bin/dash" to "/usr/bin/dash",
+    "bin/dash" to "/bin/dash",
+    "usr/bin/sh" to "/usr/bin/sh",
     "bin/sh" to "/bin/sh",
   )
 

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Image, Linking, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { IconeBureau } from '../bureau/Bureau';
@@ -114,6 +114,8 @@ export function MenuLateral({ visible, actif, couleurs: c, onChoisir, onFermer }
         ]}
       >
         <SafeAreaView edges={['top', 'bottom', 'left']} style={styles.flex}>
+          {/* Défilable : en paysage (écran court), les dernières entrées restent atteignables. */}
+          <ScrollView contentContainerStyle={styles.contenu} showsVerticalScrollIndicator={false}>
           <View style={styles.entete}>
             <Image source={IMAGES.logoCouronne} style={styles.logo} accessibilityLabel="Logo Marceau" />
             <Text style={[styles.titre, { color: c.texte }]}>Marceau</Text>
@@ -153,6 +155,7 @@ export function MenuLateral({ visible, actif, couleurs: c, onChoisir, onFermer }
               </Pressable>
             ))}
           </View>
+          </ScrollView>
         </SafeAreaView>
       </Animated.View>
     </Modal>
@@ -161,6 +164,7 @@ export function MenuLateral({ visible, actif, couleurs: c, onChoisir, onFermer }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  contenu: { flexGrow: 1, paddingBottom: 12 },
   hamburger: { fontSize: 26, fontWeight: '700', lineHeight: 30 },
   voile: { backgroundColor: 'rgba(0,0,0,0.55)' },
   panneau: { position: 'absolute', top: 0, bottom: 0, left: 0, borderRightWidth: StyleSheet.hairlineWidth },
