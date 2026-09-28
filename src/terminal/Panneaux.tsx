@@ -118,11 +118,26 @@ function Console({
 // Options 1 et 4 : shell du téléphone et Linux (PRoot), sur un vrai PTY
 // ---------------------------------------------------------------------------
 
-function SessionPty({ couleurs, type }: { couleurs: Couleurs; type: 'telephone' | 'linux' }) {
+/** Injecte une commande dans une session ; renvoie false si la session était fermée (rouverte). */
+type Injecteur = (commande: string, executer: boolean) => boolean;
+
+function SessionPty({
+  couleurs,
+  type,
+  injecterRef,
+}: {
+  couleurs: Couleurs;
+  type: 'telephone' | 'linux';
+  /** Le parent y reçoit de quoi injecter une commande (boutons Guide / Mes outils). */
+  injecterRef?: React.MutableRefObject<Injecteur | null>;
+}) {
   const terminal = useRef<PoigneeTerminal>(null);
   const id = type;
   const taille = useRef({ c: 80, l: 24 });
   const [terminee, setTerminee] = useState(false);
+  // Miroir de `terminee` lisible sans re-créer l'injecteur (évite d'envoyer dans un shell fermé).
+  const termineeRef = useRef(false);
+  termineeRef.current = terminee;
 
   const ouvrir = useCallback(async () => {
     if (!Terminal) return;
@@ -136,6 +151,23 @@ function SessionPty({ couleurs, type }: { couleurs: Couleurs; type: 'telephone' 
       setTerminee(true);
     }
   }, [id, type]);
+
+  // Expose au parent un injecteur : si le shell est fermé, on le relance et on n'envoie PAS la
+  // commande (elle serait perdue) — la personne retouche le bouton une fois le shell revenu.
+  useEffect(() => {
+    if (!injecterRef) return;
+    injecterRef.current = (commande, executer) => {
+      if (termineeRef.current || !Terminal) {
+        ouvrir();
+        return false;
+      }
+      Terminal.ecrire(id, executer ? `${commande}\r` : commande).catch(() => {});
+      return true;
+    };
+    return () => {
+      injecterRef.current = null;
+    };
+  }, [injecterRef, id, ouvrir]);
 
   useSession(id, terminal, (code) => {
     setTerminee(true);
@@ -253,10 +285,12 @@ function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
   // donc en rouvrant le guide on reprend au même objectif et à la même étape.
   const [guideId, setGuideId] = useState<string | null>(null);
   const [guideEtape, setGuideEtape] = useState(0);
-  // Tape une commande dans la session Linux (id « linux ») ; avec Entrée par défaut, sans Entrée
-  // si executer=false (pour laisser remplacer une adresse d'exemple avant de valider).
-  const lancer = (commande: string, executer = true) =>
-    Terminal?.ecrire('linux', executer ? `${commande}\r` : commande).catch(() => {});
+  // La session Linux expose ici de quoi injecter une commande. Si le shell est fermé, l'injecteur
+  // le relance et renvoie false (la commande n'est pas envoyée dans le vide).
+  const injecter = useRef<Injecteur | null>(null);
+  // Tape une commande dans la session Linux ; avec Entrée par défaut, sans Entrée si executer=false
+  // (pour laisser remplacer une adresse d'exemple avant de valider).
+  const lancer = (commande: string, executer = true) => injecter.current?.(commande, executer) ?? false;
   return (
     <View style={styles.flex}>
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
@@ -265,7 +299,7 @@ function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
         <Bouton couleurs={c} libelle="📖 Commandes" compact secondaire onPress={() => setAide(true)} />
         <Bouton couleurs={c} libelle="📦 Catalogue Kali" compact secondaire onPress={() => Linking.openURL(LIEN_CATALOGUE)} />
       </View>
-      <SessionPty couleurs={c} type="linux" />
+      <SessionPty couleurs={c} type="linux" injecterRef={injecter} />
       <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
       <GuidePasAPas
         visible={guide}

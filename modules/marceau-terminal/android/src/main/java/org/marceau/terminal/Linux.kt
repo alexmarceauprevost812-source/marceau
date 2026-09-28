@@ -150,16 +150,18 @@ internal object Linux {
     val arch = archKali()
     val base = "https://kali.download/nethunter-images/current/rootfs"
     progression("Recherche du fichier sur le serveur de Kali…", 0)
-    // On prend l'édition demandée ; on ne se rabat sur l'autre que si Kali répond clairement
-    // « fichier absent » (404) pour celle-ci sur cette architecture — jamais sur une simple panne
-    // réseau (coupure, délai dépassé…).
     fun candidat(edition: String): String? {
       val nom = "kali-nethunter-rootfs-$edition-$arch.tar.xz"
       return if (urlExisteVraiment("$base/$nom")) nom else null
     }
-    val autre = if (editionVoulue == "full") "minimal" else "full"
-    val fichier = candidat(editionVoulue) ?: candidat(autre)
-      ?: throw IOException("Aucun rootfs Kali trouvé pour cette architecture ($arch) sur le serveur officiel. Réessaie plus tard.")
+    // On ne se rabat QUE de « full » vers « minimal » (le plus petit) si Kali ne publie pas « full »
+    // pour cette architecture. On ne remonte JAMAIS un choix « léger » vers « full » en douce : ce
+    // serait trahir la personne qui a justement choisi le léger (données mobiles / espace limités).
+    // Le repli n'a lieu que sur un vrai 404, jamais sur une panne réseau (candidat() renverrait null).
+    val fichier = when (editionVoulue) {
+      "full" -> candidat("full") ?: candidat("minimal")
+      else -> candidat("minimal")
+    } ?: throw IOException("Kali ne propose pas cette édition pour ton téléphone ($arch) pour l'instant. Réessaie plus tard ou choisis l'autre édition.")
 
     progression("Vérification de l'empreinte officielle…", 0)
     val verif = empreinteAttendue(base, fichier)
