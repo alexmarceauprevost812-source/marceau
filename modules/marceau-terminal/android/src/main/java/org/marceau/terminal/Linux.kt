@@ -198,7 +198,7 @@ internal object Linux {
   }
 
   /** Numéro de la configuration écrite : on met à jour un ancien Linux quand ce numéro change. */
-  private const val VERSION_CONFIG = 3
+  private const val VERSION_CONFIG = 4
   private const val MARQUEUR_CONFIG = ".marceau-config"
 
   /** Écrit DNS, dépôts et la commande d'aide « outils » dans un rootfs Kali. */
@@ -213,15 +213,24 @@ internal object Linux {
       "deb https://http.kali.org/kali kali-rolling main non-free non-free-firmware contrib\n",
     )
 
+    // L'édition réellement installée (« full » ou, en repli, « minimal ») est dans le marqueur :
+    // on ne dit « tout est déjà installé » que si c'est vrai.
+    val complete = try { File(racine, MARQUEUR).readText().contains("-full-") } catch (ignore: Exception) { false }
+    val intro = if (complete) {
+      "Tous les outils de Kali sont déjà installés (édition complète) — rien à installer pour commencer."
+    } else {
+      "Édition allégée de Kali : installe les outils dont tu as besoin avec  apt update && apt install <nom>"
+    }
+
     File(racine, "etc/profile.d").mkdirs()
     File(racine, "etc/profile.d/marceau.sh").writeText(
       """
       |# Couleurs du terminal de Marceau : « kali » en vert lime, le reste (dont « root ») en blanc.
       |export PS1='\[\e[38;2;255;255;255m\]\u@\[\e[38;2;166;255;0m\]kali\[\e[38;2;255;255;255m\]:\w\$ \[\e[0m\]'
       |alias ll='ls -la'
-      |# « outils » : rappelle que tout est déjà installé (édition complète de Kali).
+      |# « outils » : rappelle ce qui est installé et comment ajouter un outil.
       |outils() {
-      |  echo 'Tous les outils de Kali sont déjà installés — rien à installer pour commencer.'
+      |  echo '$intro'
       |  echo
       |  echo 'Réseau      : nmap tcpdump netcat-traditional dnsutils curl wget'
       |  echo 'Mots de passe: john hashcat hydra'

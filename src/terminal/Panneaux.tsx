@@ -149,7 +149,7 @@ function SessionPty({ couleurs, type }: { couleurs: Couleurs; type: 'telephone' 
         taille.current = { c, l };
         if (type === 'linux') {
           terminal.current?.ecrire(
-            GRIS('Kali Linux (édition complète) — tous les outils sont déjà installés. Tape « outils » pour un rappel.\r\n') +
+            GRIS('Kali Linux — tape « outils » pour voir ce qui est installé et comment ajouter un outil.\r\n') +
               GRIS('Tes fichiers du terminal Téléphone sont dans /telephone\r\n\r\n'),
           );
         }
@@ -211,7 +211,7 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
       <Info
         couleurs={c}
         titre="Un vrai Kali Linux dans ton téléphone"
-        texte="Marceau installe le rootfs officiel de Kali Linux (NetHunter, édition complète — plusieurs Go à télécharger, mieux vaut être en Wi-Fi et avoir de la place). Tous les outils de sécurité de Kali sont déjà installés (Python, Git, Node.js, nmap, hydra, aircrack-ng, sqlmap, wireshark…) : rien à installer pour commencer. Tape « outils » dans le terminal pour un rappel. Le bouton « 📖 Commandes » ouvre l'aide, et « 📦 Catalogue Kali » le catalogue officiel des outils."
+        texte="Marceau installe le rootfs officiel de Kali Linux (NetHunter, édition complète — plusieurs Go à télécharger, mieux vaut être en Wi-Fi et avoir de la place). Les outils de sécurité de Kali y sont déjà installés (Python, Git, Node.js, nmap, hydra, aircrack-ng, sqlmap, wireshark…). Si Kali ne propose pas l'édition complète pour ton téléphone, c'est l'édition allégée qui est installée et tu ajoutes les outils avec « apt install ». Tape « outils » dans le terminal pour un rappel. Le bouton « 📖 Commandes » ouvre l'aide, et « 📦 Catalogue Kali » le catalogue officiel des outils."
       >
         {installation && (
           <Text style={[styles.corps, { color: c.texte }]}>
