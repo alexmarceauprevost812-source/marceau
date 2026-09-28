@@ -20,6 +20,7 @@ import type { Couleurs } from '../theme';
 import { usePersistant } from '../hooks/usePersistant';
 import { AideLinux } from './AideLinux';
 import { BarreTouches } from './BarreTouches';
+import { GuidePasAPas } from './GuidePasAPas';
 import { MesOutils } from './MesOutils';
 import { VueTerminal, type PoigneeTerminal, type Theme } from './VueTerminal';
 
@@ -232,23 +233,27 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
 function LinuxPret({ couleurs: c }: { couleurs: Couleurs }) {
   const [aide, setAide] = useState(false);
   const [outils, setOutils] = useState(false);
+  const [guide, setGuide] = useState(false);
+  // Tape une commande dans la session Linux (id « linux ») puis Entrée.
+  const lancer = (commande: string) => Terminal?.ecrire('linux', `${commande}\r`).catch(() => {});
   return (
     <View style={styles.flex}>
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
+        <Bouton couleurs={c} libelle="🧭 Guide" compact secondaire onPress={() => setGuide(true)} />
         <Bouton couleurs={c} libelle="🧰 Mes outils" compact secondaire onPress={() => setOutils(true)} />
         <Bouton couleurs={c} libelle="📖 Commandes" compact secondaire onPress={() => setAide(true)} />
         <Bouton couleurs={c} libelle="📦 Catalogue Kali" compact secondaire onPress={() => Linking.openURL(LIEN_CATALOGUE)} />
       </View>
       <SessionPty couleurs={c} type="linux" />
       <AideLinux visible={aide} couleurs={c} onFermer={() => setAide(false)} />
+      <GuidePasAPas visible={guide} couleurs={c} onFermer={() => setGuide(false)} onLancer={lancer} />
       <MesOutils
         visible={outils}
         couleurs={c}
         onFermer={() => setOutils(false)}
         onLancer={(o) => {
           setOutils(false);
-          // Même session que SessionPty (id « linux ») : on tape le nom de l'outil puis Entrée.
-          Terminal?.ecrire('linux', `${o}\r`).catch(() => {});
+          lancer(o);
         }}
       />
     </View>
