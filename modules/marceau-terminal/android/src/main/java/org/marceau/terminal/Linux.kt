@@ -301,6 +301,18 @@ internal object Linux {
     f.delete()
   }
 
+  /**
+   * Shell à lancer : bash si présent (historique, édition de ligne — c'est le shell normal de
+   * Kali), sinon /bin/sh (dash, paquet essentiel toujours présent dans une image Debian/Kali,
+   * même la plus minimale).
+   */
+  private fun shellDisponible(racine: File): String =
+    when {
+      File(racine, "bin/bash").exists() -> "/bin/bash"
+      File(racine, "usr/bin/bash").exists() -> "/usr/bin/bash"
+      else -> "/bin/sh"
+    }
+
   /** Commande qui lance le shell Linux avec PRoot. */
   fun commande(ctx: Context): Triple<String, Array<String>, Array<String>> {
     // Met à jour un Linux installé avant cette version (dépôts épinglés, commande « outils »).
@@ -318,6 +330,11 @@ internal object Linux {
     }
     val tmp = File(ctx.cacheDir, "proot").apply { mkdirs() }
 
+    // PRoot (ptrace) ne « nettoie » jamais l'environnement lui-même : ce que reçoit son propre
+    // execve devient aussi celui du programme du Linux qu'il lance. On passe donc directement ici
+    // les variables voulues pour le Linux (HOME, TERM, COLORTERM, LANG, PATH), au lieu de les
+    // fixer via un « /usr/bin/env -i … » lancé DANS le Linux — un exécutable qui n'existe plus
+    // forcément dans un rootfs Kali aussi minimal (constaté : « /usr/bin/env not found »).
     val env = mutableListOf(
       "LD_LIBRARY_PATH=${lib.absolutePath}:${ctx.applicationInfo.nativeLibraryDir}",
       "PROOT_LOADER=${natif(ctx, "libproot-loader.so").absolutePath}",
@@ -325,6 +342,9 @@ internal object Linux {
       "PROOT_NO_SECCOMP=1",
       "HOME=/root",
       "TERM=xterm-256color",
+      "COLORTERM=truecolor",
+      "LANG=C.UTF-8",
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     )
     val loader32 = natif(ctx, "libproot-loader32.so")
     if (loader32.exists()) env += "PROOT_LOADER_32=${loader32.absolutePath}"
@@ -341,15 +361,7 @@ internal object Linux {
       "-b", "/sys",
       "-b", "${Telephone.maison(ctx).absolutePath}:/telephone",
       "-w", "/root",
-      // Environnement propre pour le Linux (sans les variables d'Android).
-      "/usr/bin/env", "-i",
-      "HOME=/root",
-      "TERM=xterm-256color",
-      "COLORTERM=truecolor",
-      "LANG=C.UTF-8",
-      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-      // bash (shell par défaut de Kali) : historique et édition de ligne, contrairement à dash (/bin/sh).
-      "/bin/bash", "-l",
+      shellDisponible(racine(ctx)), "-l",
     )
     return Triple(proot, args, env.toTypedArray())
   }
