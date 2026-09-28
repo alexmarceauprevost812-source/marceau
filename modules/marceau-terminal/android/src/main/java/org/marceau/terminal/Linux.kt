@@ -36,11 +36,18 @@ internal object Linux {
   fun prootDisponible(ctx: Context) =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && natif(ctx, "libproot.so").exists()
 
-  /** Installé ET c'est bien un rootfs Kali (un ancien Alpine encore présent est traité comme non installé). */
+  /**
+   * Installé ET utilisable : marqueur d'un rootfs Kali (un ancien Alpine est traité comme non
+   * installé) ET un shell réellement présent. Un rootfs abîmé (téléchargement/extraction
+   * interrompus par le passé, sans même /bin/sh) est traité comme non installé — l'écran propose
+   * alors « Installer Linux » pour repartir proprement, au lieu de planter à chaque ouverture.
+   */
   fun installe(ctx: Context): Boolean {
-    val marqueur = File(racine(ctx), MARQUEUR)
+    val racine = racine(ctx)
+    val marqueur = File(racine, MARQUEUR)
     if (!marqueur.exists()) return false
-    return try { marqueur.readText().trim().startsWith(PREFIXE_MARQUEUR) } catch (ignore: Exception) { false }
+    val bonMarqueur = try { marqueur.readText().trim().startsWith(PREFIXE_MARQUEUR) } catch (ignore: Exception) { false }
+    return bonMarqueur && cheminShell(racine) != null
   }
 
   /**
@@ -161,6 +168,13 @@ internal object Linux {
     // disque en même temps, et c'est justement ce qui ferait échouer le nouveau téléchargement
     // sur un téléphone à court d'espace.
     supprimerSansSuivre(temporaire)
+    // Un rootfs déjà présent mais INUTILISABLE (abîmé/sans shell, ou un ancien Alpine) n'a aucune
+    // valeur et occupe pourtant plusieurs Go : on le libère AVANT de télécharger le remplacement,
+    // sinon la réinstallation pourrait échouer faute de place sur un téléphone plein. On ne touche
+    // jamais à un rootfs utilisable — mais un rootfs utilisable n'amène pas jusqu'ici (l'écran
+    // « Installer Linux » ne s'affiche que pour un Linux absent ou inutilisable).
+    val racine = racine(ctx)
+    if (racine.exists() && !installe(ctx)) supprimerSansSuivre(racine)
     // Si une étape échoue (disque plein, coupure réseau…), on efface ce qu'on a commencé à
     // écrire — l'archive téléchargée ET le rootfs à moitié extrait — pour ne pas laisser
     // plusieurs Go inutiles, surtout gênants quand la panne vient justement d'un disque plein.
@@ -192,7 +206,8 @@ internal object Linux {
     }
     archive.delete()
 
-    val racine = racine(ctx)
+    // Efface un éventuel reste (rootfs utilisable réinstallé, ou course avec une autre tentative)
+    // juste avant le renommage, pour que racine soit bien vide.
     supprimerSansSuivre(racine)
     if (!temporaire.renameTo(racine)) throw IOException("Impossible de finaliser l'installation")
   }
@@ -314,16 +329,29 @@ internal object Linux {
   }
 
   /**
-   * Shell à lancer : bash si présent (historique, édition de ligne — c'est le shell normal de
-   * Kali), sinon /bin/sh (dash, paquet essentiel toujours présent dans une image Debian/Kali,
-   * même la plus minimale).
+   * Emplacements possibles d'un shell dans le rootfs (chemin réel côté Android → chemin vu du Linux).
+   * On teste bash (le shell normal de Kali) puis dash/sh. On vérifie « usr/bin » ET « bin » : sur
+   * une image « usrmerge » (Debian/Kali récent), /bin est un lien vers /usr/bin, donc le fichier
+   * réel est dans usr/bin.
    */
-  private fun shellDisponible(racine: File): String =
-    when {
-      File(racine, "bin/bash").exists() -> "/bin/bash"
-      File(racine, "usr/bin/bash").exists() -> "/usr/bin/bash"
-      else -> "/bin/sh"
-    }
+  // Chaque candidat renvoie le chemin (vu du Linux) qui pointe vers CE fichier précis : si le shell
+  // est dans usr/bin, on renvoie /usr/bin/… — jamais /bin/…, qui ne résout que si le lien
+  // usrmerge /bin → /usr/bin est intact (pas garanti sur un rootfs abîmé).
+  private val SHELLS = listOf(
+    "usr/bin/bash" to "/usr/bin/bash",
+    "bin/bash" to "/bin/bash",
+    "usr/bin/dash" to "/usr/bin/dash",
+    "bin/dash" to "/bin/dash",
+    "usr/bin/sh" to "/usr/bin/sh",
+    "bin/sh" to "/bin/sh",
+  )
+
+  /** Le chemin (vu du Linux) d'un shell réellement présent, ou null si le rootfs n'en a aucun. */
+  private fun cheminShell(racine: File): String? =
+    SHELLS.firstOrNull { File(racine, it.first).exists() }?.second
+
+  /** Shell à lancer : bash si présent, sinon /bin/sh (repli). */
+  private fun shellDisponible(racine: File): String = cheminShell(racine) ?: "/bin/sh"
 
   /** Commande qui lance le shell Linux avec PRoot. */
   fun commande(ctx: Context): Triple<String, Array<String>, Array<String>> {
