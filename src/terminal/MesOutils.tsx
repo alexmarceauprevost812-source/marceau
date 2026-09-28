@@ -179,8 +179,9 @@ export function MesOutils({ visible, couleurs: c, onFermer, onLancer }: Props) {
         <ScrollView contentContainerStyle={styles.corps} keyboardShouldPersistTaps="handled">
           <Text style={[styles.section, { color: c.texte }]}>📦 Packs d’outils</Text>
           <Text style={[styles.intro, { color: c.texteDoux }]}>
-            Kali a des centaines d’outils : impossible de tous les mettre d’avance. Touche un thème pour installer
-            ses outils d’un coup. Le reste s’installe à la demande avec « apt install ».
+            L’édition complète de Kali installe déjà presque tous ces outils : ces boutons servent surtout à vérifier
+            ou à réinstaller un pack (ex. après un « Installer Linux » qui serait retombé sur l’édition allégée). Un
+            outil manquant s’installe aussi à la demande avec « apt install ».
           </Text>
           <Pressable
             onPress={() => Linking.openURL(LIEN_CATALOGUE)}

@@ -129,7 +129,10 @@ internal object Linux {
       else -> throw IOException("Processeur non pris en charge : ${Build.SUPPORTED_ABIS.joinToString()}")
     }
 
-  /** Télécharge et installe le rootfs minimal officiel de Kali NetHunter (plusieurs centaines de Mo). */
+  /**
+   * Télécharge et installe le rootfs officiel de Kali NetHunter, édition « full » : tous les
+   * outils de sécurité de Kali déjà installés (plusieurs Go — mieux vaut être en Wi-Fi).
+   */
   fun installer(ctx: Context, progression: (String, Int) -> Unit) {
     if (!prootDisponible(ctx)) {
       throw IOException("Le Linux intégré demande Android 8 ou plus récent, et PRoot inclus dans l'APK (voir scripts/construire-linux.sh).")
@@ -137,14 +140,14 @@ internal object Linux {
     val arch = archKali()
     val base = "https://kali.download/nethunter-images/current/rootfs"
     progression("Recherche du fichier sur le serveur de Kali…", 0)
-    // « minimal » d'abord (le plus petit) ; « full » (bien plus gros) seulement si Kali répond
-    // clairement « fichier absent » (404) pour « minimal » — jamais sur une simple panne réseau
-    // (coupure, délai dépassé…), qui lancerait sinon un téléchargement bien plus gros que prévu.
+    // « full » d'abord (tous les outils déjà installés) ; « minimal » seulement si Kali répond
+    // clairement « fichier absent » (404) pour « full » sur cette architecture — jamais sur une
+    // simple panne réseau (coupure, délai dépassé…), qui basculerait sinon vers l'édition minimale.
     fun candidat(edition: String): String? {
       val nom = "kali-nethunter-rootfs-$edition-$arch.tar.xz"
       return if (urlExisteVraiment("$base/$nom")) nom else null
     }
-    val fichier = candidat("minimal") ?: candidat("full")
+    val fichier = candidat("full") ?: candidat("minimal")
       ?: throw IOException("Aucun rootfs Kali trouvé pour cette architecture ($arch) sur le serveur officiel. Réessaie plus tard.")
 
     progression("Vérification de l'empreinte officielle…", 0)
@@ -160,7 +163,7 @@ internal object Linux {
     supprimerSansSuivre(temporaire)
     // Si une étape échoue (disque plein, coupure réseau…), on efface ce qu'on a commencé à
     // écrire — l'archive téléchargée ET le rootfs à moitié extrait — pour ne pas laisser
-    // plusieurs centaines de Mo inutiles, surtout gênants quand la panne vient d'un disque plein.
+    // plusieurs Go inutiles, surtout gênants quand la panne vient justement d'un disque plein.
     try {
       telecharger("$base/$fichier", archive) { p -> progression("Téléchargement de Kali Linux…", p) }
 
@@ -195,7 +198,7 @@ internal object Linux {
   }
 
   /** Numéro de la configuration écrite : on met à jour un ancien Linux quand ce numéro change. */
-  private const val VERSION_CONFIG = 2
+  private const val VERSION_CONFIG = 4
   private const val MARQUEUR_CONFIG = ".marceau-config"
 
   /** Écrit DNS, dépôts et la commande d'aide « outils » dans un rootfs Kali. */
@@ -210,16 +213,24 @@ internal object Linux {
       "deb https://http.kali.org/kali kali-rolling main non-free non-free-firmware contrib\n",
     )
 
+    // L'édition réellement installée (« full » ou, en repli, « minimal ») est dans le marqueur :
+    // on ne dit « tout est déjà installé » que si c'est vrai.
+    val complete = try { File(racine, MARQUEUR).readText().contains("-full-") } catch (ignore: Exception) { false }
+    val intro = if (complete) {
+      "Tous les outils de Kali sont déjà installés (édition complète) — rien à installer pour commencer."
+    } else {
+      "Édition allégée de Kali : installe les outils dont tu as besoin avec  apt update && apt install <nom>"
+    }
+
     File(racine, "etc/profile.d").mkdirs()
     File(racine, "etc/profile.d/marceau.sh").writeText(
       """
-      |# Couleurs du terminal de Marceau : nom d'utilisateur en vert lime, le reste en blanc.
-      |export PS1='\[\e[38;2;166;255;0m\]\u\[\e[38;2;255;255;255m\]@kali:\w\$ \[\e[0m\]'
+      |# Couleurs du terminal de Marceau : « kali » en vert lime, le reste (dont « root ») en blanc.
+      |export PS1='\[\e[38;2;255;255;255m\]\u@\[\e[38;2;166;255;0m\]kali\[\e[38;2;255;255;255m\]:\w\$ \[\e[0m\]'
       |alias ll='ls -la'
-      |# « outils » : rappelle comment installer des outils (tu choisis, tu télécharges).
+      |# « outils » : rappelle ce qui est installé et comment ajouter un outil.
       |outils() {
-      |  echo 'Installe un outil avec :  apt install <nom>   (ex. apt install nmap)'
-      |  echo 'Mets à jour la liste des paquets une fois :  apt update'
+      |  echo '$intro'
       |  echo
       |  echo 'Réseau      : nmap tcpdump netcat-traditional dnsutils curl wget'
       |  echo 'Mots de passe: john hashcat hydra'
@@ -227,6 +238,7 @@ internal object Linux {
       |  echo 'Web         : nikto sqlmap whatweb'
       |  echo 'Programmation: python3 python3-pip git nodejs npm gcc make'
       |  echo
+      |  echo 'Un outil manque quand meme ? apt update && apt install <nom>'
       |  echo 'Cherche un paquet :  apt search <mot>'
       |  echo 'Sers-toi de ces outils uniquement sur TES appareils/réseaux ou avec autorisation écrite.'
       |}
@@ -301,6 +313,18 @@ internal object Linux {
     f.delete()
   }
 
+  /**
+   * Shell à lancer : bash si présent (historique, édition de ligne — c'est le shell normal de
+   * Kali), sinon /bin/sh (dash, paquet essentiel toujours présent dans une image Debian/Kali,
+   * même la plus minimale).
+   */
+  private fun shellDisponible(racine: File): String =
+    when {
+      File(racine, "bin/bash").exists() -> "/bin/bash"
+      File(racine, "usr/bin/bash").exists() -> "/usr/bin/bash"
+      else -> "/bin/sh"
+    }
+
   /** Commande qui lance le shell Linux avec PRoot. */
   fun commande(ctx: Context): Triple<String, Array<String>, Array<String>> {
     // Met à jour un Linux installé avant cette version (dépôts épinglés, commande « outils »).
@@ -318,6 +342,11 @@ internal object Linux {
     }
     val tmp = File(ctx.cacheDir, "proot").apply { mkdirs() }
 
+    // PRoot (ptrace) ne « nettoie » jamais l'environnement lui-même : ce que reçoit son propre
+    // execve devient aussi celui du programme du Linux qu'il lance. On passe donc directement ici
+    // les variables voulues pour le Linux (HOME, TERM, COLORTERM, LANG, PATH), au lieu de les
+    // fixer via un « /usr/bin/env -i … » lancé DANS le Linux — un exécutable qui n'existe plus
+    // forcément dans un rootfs Kali aussi minimal (constaté : « /usr/bin/env not found »).
     val env = mutableListOf(
       "LD_LIBRARY_PATH=${lib.absolutePath}:${ctx.applicationInfo.nativeLibraryDir}",
       "PROOT_LOADER=${natif(ctx, "libproot-loader.so").absolutePath}",
@@ -325,6 +354,9 @@ internal object Linux {
       "PROOT_NO_SECCOMP=1",
       "HOME=/root",
       "TERM=xterm-256color",
+      "COLORTERM=truecolor",
+      "LANG=C.UTF-8",
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     )
     val loader32 = natif(ctx, "libproot-loader32.so")
     if (loader32.exists()) env += "PROOT_LOADER_32=${loader32.absolutePath}"
@@ -341,15 +373,7 @@ internal object Linux {
       "-b", "/sys",
       "-b", "${Telephone.maison(ctx).absolutePath}:/telephone",
       "-w", "/root",
-      // Environnement propre pour le Linux (sans les variables d'Android).
-      "/usr/bin/env", "-i",
-      "HOME=/root",
-      "TERM=xterm-256color",
-      "COLORTERM=truecolor",
-      "LANG=C.UTF-8",
-      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-      // bash (shell par défaut de Kali) : historique et édition de ligne, contrairement à dash (/bin/sh).
-      "/bin/bash", "-l",
+      shellDisponible(racine(ctx)), "-l",
     )
     return Triple(proot, args, env.toTypedArray())
   }
