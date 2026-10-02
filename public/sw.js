@@ -5,23 +5,37 @@
 const CACHE = 'marceau-v1';
 
 // Dès l'installation, on met en cache la page d'accueil ET les fichiers qu'elle charge (scripts,
-// styles, icônes). Sans ça, à la première visite la page est déjà chargée avant que le service
+// manifeste, icône). Sans ça, à la première visite la page est déjà chargée avant que le service
 // worker la contrôle : le cache resterait vide et l'appli installée ne s'ouvrirait pas hors ligne.
-const BASE = ['/', '/manifest.json', '/favicon.ico', '/icones/icone-192.png', '/icones/icone-512.png'];
+//
+// Les fichiers indispensables sont « tout ou rien » : si l'un d'eux ne se télécharge pas
+// (connexion coupée…), l'installation ÉCHOUE. Le navigateur réessaiera plus tard et garde, en
+// attendant, l'ancien service worker et son cache qui marchaient — jamais un cache à moitié rempli.
+const FACULTATIFS = ['/icones/icone-192.png', '/icones/icone-512.png'];
+
+async function telecharger(url) {
+  const rep = await fetch(url, { cache: 'no-cache' });
+  if (!rep.ok) throw new Error(`${url} : ${rep.status}`);
+  return rep;
+}
 
 async function precharger() {
-  const cache = await caches.open(CACHE);
-  const accueil = await fetch('/', { cache: 'no-cache' });
+  const accueil = await telecharger('/');
   const html = await accueil.clone().text();
+  // Fichiers référencés par la page (le nom du script change à chaque version).
+  const refs = [...new Set([...html.matchAll(/(?:src|href)="(\/[^"]+)"/g)].map((m) => m[1]))];
+  if (!refs.some((u) => u.endsWith('.js'))) throw new Error('script principal introuvable dans la page');
+  const indispensables = await Promise.all(refs.map(async (u) => [u, await telecharger(u)]));
+  // Tout est téléchargé : on peut maintenant remplir le cache.
+  const cache = await caches.open(CACHE);
   await cache.put('/', accueil);
-  // Fichiers référencés par la page (le nom des scripts change à chaque version).
-  const refs = [...html.matchAll(/(?:src|href)="(\/[^"]+)"/g)].map((m) => m[1]);
-  const urls = [...new Set([...BASE.slice(1), ...refs])];
-  await Promise.all(urls.map((u) => cache.add(u).catch(() => {})));
+  await Promise.all(indispensables.map(([u, rep]) => cache.put(u, rep)));
+  await Promise.all(FACULTATIFS.map((u) => cache.add(u).catch(() => {})));
 }
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(precharger().catch(() => {}).then(() => self.skipWaiting()));
+  // Pas de .catch : un échec doit faire échouer l'installation.
+  e.waitUntil(precharger().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
