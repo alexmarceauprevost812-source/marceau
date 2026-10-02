@@ -37,6 +37,13 @@ async function precharger() {
   const script = refs.find((u) => u.endsWith('.js'));
   if (!script) throw new Error('script principal introuvable dans la page');
   const indispensables = await Promise.all(refs.map(async (u) => [u, await telecharger(u)]));
+  // Les images de l'appli (avatars, logo…) ne sont référencées que dans le script, pas dans la
+  // page : on les cherche dans le script pour que tous les écrans s'affichent aussi hors ligne.
+  const code = await indispensables.find(([u]) => u === script)[1].clone().text();
+  const images = [...new Set([...code.matchAll(/"(\/assets\/[^"]+)"/g)].map((m) => m[1]))].filter(
+    (u) => !refs.includes(u),
+  );
+  indispensables.push(...(await Promise.all(images.map(async (u) => [u, await telecharger(u)]))));
 
   // Nom unique à chaque installation (même si le script n'a pas changé) : on n'écrit JAMAIS
   // dans le cache de la version active, et on ne le supprime jamais ici.
