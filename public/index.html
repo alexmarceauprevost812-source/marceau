@@ -34,7 +34,11 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
-          navigator.serviceWorker.register('/sw.js').catch(function () {});
+          // Le nom du script change à chaque version : on le passe au service worker pour que le
+          // navigateur l'installe à nouveau (et prépare le cache hors ligne) à chaque mise à jour.
+          var s = document.querySelector('script[src*="/_expo/static/js/web/"]');
+          var v = s ? s.getAttribute('src').split('/').pop() : '';
+          navigator.serviceWorker.register('/sw.js?v=' + encodeURIComponent(v)).catch(function () {});
         });
       }
     </script>
