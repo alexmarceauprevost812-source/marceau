@@ -4,7 +4,7 @@
  * - OpenCode Zen : modèles gratuits en ligne (clé gratuite sur https://opencode.ai/auth).
  *   Liste des modèles gratuits : https://opencode.ai/docs/zen/
  * - Ollama : modèles open source sur ton ordinateur, sans clé.
- * - Anthropic : les modèles Claude, avec ta clé API (https://console.anthropic.com).
+ * - Anthropic : les modèles Claude, avec ta clé API (https://platform.claude.com).
  * - OpenAI : GPT et Codex, avec ta clé API (https://platform.openai.com).
  *
  * Le bouton « Charger les modèles » des réglages lit la liste à jour auprès du serveur,
@@ -27,6 +27,8 @@ export type Fournisseur = {
   modelesSuggeres: string[];
   besoinCle: boolean;
   lienCle?: string;
+  /** Pas à pas affiché sous le champ de la clé, pour qui n'a jamais créé de clé API. */
+  etapesCle?: string[];
 };
 
 export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
@@ -42,6 +44,12 @@ export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
     modelesSuggeres: ['big-pickle', 'nemotron-3.5-lightning-free', 'mimo-v2.6-flash-free'],
     besoinCle: true,
     lienCle: 'https://opencode.ai/auth',
+    etapesCle: [
+      'Touche « Obtenir ma clé » : le site OpenCode s’ouvre.',
+      'Connecte-toi (avec GitHub ou Google, par exemple).',
+      'Crée une clé API, puis copie-la. C’est gratuit.',
+      'Reviens ici, colle-la dans le champ, puis touche « Enregistrer ».',
+    ],
   },
   ollama: {
     id: 'ollama',
@@ -66,7 +74,14 @@ export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
     modeleParDefaut: 'claude-sonnet-5',
     modelesSuggeres: ['claude-sonnet-5', 'claude-opus-5-5', 'claude-haiku-4-5-20251001'],
     besoinCle: true,
-    lienCle: 'https://console.anthropic.com/settings/keys',
+    lienCle: 'https://platform.claude.com/settings/keys',
+    etapesCle: [
+      'Touche « Obtenir ma clé » : la console Claude d’Anthropic s’ouvre.',
+      'Crée un compte (ou connecte-toi) avec ton adresse courriel.',
+      'Ajoute un peu de crédit dans la facturation (Billing) : c’est payant à l’usage.',
+      'Crée une clé (« Create Key »), donne-lui un nom, puis copie-la. Elle commence par « sk-ant- » et ne s’affiche qu’une seule fois.',
+      'Reviens ici, colle-la dans le champ, puis touche « Enregistrer ».',
+    ],
   },
   openai: {
     id: 'openai',
@@ -80,6 +95,13 @@ export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
     modelesSuggeres: ['gpt-5.3-codex', 'gpt-5.5', 'gpt-5-mini'],
     besoinCle: true,
     lienCle: 'https://platform.openai.com/api-keys',
+    etapesCle: [
+      'Touche « Obtenir ma clé » : la plateforme OpenAI s’ouvre.',
+      'Crée un compte (ou connecte-toi).',
+      'Ajoute un peu de crédit dans la facturation (Billing) : c’est payant à l’usage.',
+      'Crée une clé (« Create new secret key »), puis copie-la. Elle commence par « sk- » et ne s’affiche qu’une seule fois.',
+      'Reviens ici, colle-la dans le champ, puis touche « Enregistrer ».',
+    ],
   },
 };
 

@@ -186,9 +186,26 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
                   accessibilityLabel="Clé API"
                 />
                 {f.lienCle && (
-                  <Pressable onPress={() => Linking.openURL(f.lienCle!)} accessibilityRole="link">
-                    <Text style={[styles.lien, { color: c.accentTexte }]}>Obtenir une clé →</Text>
+                  <Pressable
+                    onPress={() => Linking.openURL(f.lienCle!)}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Obtenir ma clé ${f.nom}`}
+                    style={[styles.boutonCle, { borderColor: c.accent }]}
+                  >
+                    <Text style={[styles.lien, { color: c.accentTexte }]}>🔑 Obtenir ma clé {f.nom} →</Text>
                   </Pressable>
+                )}
+                {!!f.etapesCle?.length && (
+                  <View style={styles.etapes}>
+                    <Text style={[styles.aide, { color: c.texte, fontWeight: '700' }]}>
+                      Pas de clé ? Voici comment faire :
+                    </Text>
+                    {f.etapesCle.map((etape, i) => (
+                      <Text key={i} style={[styles.aide, { color: c.texteDoux }]}>
+                        {i + 1}. {etape}
+                      </Text>
+                    ))}
+                  </View>
                 )}
                 <Text style={[styles.aide, { color: c.texteDoux }]}>
                   {Platform.OS === 'web'
@@ -342,6 +359,8 @@ const styles = StyleSheet.create({
   titreBarre: { fontSize: 17, fontWeight: '700' },
   lien: { fontSize: 15, fontWeight: '600' },
   ligneLien: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  boutonCle: { borderWidth: 1.5, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, alignItems: 'center' },
+  etapes: { gap: 4 },
   contenu: { paddingHorizontal: 20, paddingBottom: 40, gap: 10 },
   aide: { fontSize: 14, lineHeight: 20 },
   etiquette: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginTop: 14 },
