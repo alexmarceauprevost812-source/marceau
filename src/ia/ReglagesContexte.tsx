@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 
 import { sauvegarder } from '../hooks/usePersistant';
+
+import { effacerSecret, ecrireSecret, lireSecret } from './coffre';
 
 import {
   connexionActive,
@@ -32,7 +33,7 @@ type Contexte = {
 
 const ReglagesCtx = createContext<Contexte | null>(null);
 
-/** Réglages de l'IA partagés par toute l'appli. Les clés API vont dans le coffre sécurisé. */
+/** Réglages de l'IA partagés par toute l'appli. Les clés API restent sur l'appareil (voir coffre.ts). */
 export function ReglagesIAProvider({
   children,
   ouvrirReglages,
@@ -53,10 +54,10 @@ export function ReglagesIAProvider({
           actif: ORDRE_FOURNISSEURS.includes(lu.actif) ? lu.actif : defaut.actif,
           actifCodex: ORDRE_FOURNISSEURS.includes(lu.actifCodex) ? lu.actifCodex : defaut.actifCodex,
           configs: { ...defaut.configs },
-          jetonGithub: (await SecureStore.getItemAsync(CLE_GITHUB).catch(() => null)) ?? '',
+          jetonGithub: (await lireSecret(CLE_GITHUB)) ?? '',
         };
         for (const id of ORDRE_FOURNISSEURS) {
-          const cle = (await SecureStore.getItemAsync(cleSecrete(id)).catch(() => null)) ?? '';
+          const cle = (await lireSecret(cleSecrete(id))) ?? '';
           r.configs[id] = { ...defaut.configs[id], ...(lu.configs?.[id] ?? {}), cle };
         }
         setReglages(r);
@@ -78,12 +79,12 @@ export function ReglagesIAProvider({
       ),
     };
     await sauvegarder(CLE_REGLAGES, sansCles);
-    if (r.jetonGithub.trim()) await SecureStore.setItemAsync(CLE_GITHUB, r.jetonGithub.trim()).catch(() => {});
-    else await SecureStore.deleteItemAsync(CLE_GITHUB).catch(() => {});
+    if (r.jetonGithub.trim()) await ecrireSecret(CLE_GITHUB, r.jetonGithub.trim());
+    else await effacerSecret(CLE_GITHUB);
     for (const id of ORDRE_FOURNISSEURS) {
       const cle = r.configs[id].cle.trim();
-      if (cle) await SecureStore.setItemAsync(cleSecrete(id), cle).catch(() => {});
-      else await SecureStore.deleteItemAsync(cleSecrete(id)).catch(() => {});
+      if (cle) await ecrireSecret(cleSecrete(id), cle);
+      else await effacerSecret(cleSecrete(id));
     }
   }, []);
 

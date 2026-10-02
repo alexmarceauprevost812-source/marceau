@@ -20,8 +20,32 @@ export function numeroInstalle(): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** true seulement dans le vrai APK Marceau (pas dans Expo Go ni sur iOS). */
-const verifiable = () => Platform.OS === 'android' && Application.applicationId === ID_APPLICATION;
+/** true dans le vrai APK Marceau (pas dans Expo Go ni sur iOS), et dans la version web. */
+const web = Platform.OS === 'web';
+const verifiable = () => web || (Platform.OS === 'android' && Application.applicationId === ID_APPLICATION);
+
+/**
+ * Version web : chaque déploiement Vercel change le nom du script principal (il contient une
+ * empreinte du code). On relit la page d'accueil sur le serveur et on compare ce nom avec celui
+ * du script chargé dans cette page : s'il diffère, une nouvelle version est en ligne.
+ */
+const MOTIF_SCRIPT = /\/_expo\/static\/js\/web\/[^"']+\.js/;
+
+function scriptCharge(): string | null {
+  if (typeof document === 'undefined') return null;
+  const el = document.querySelector<HTMLScriptElement>('script[src*="/_expo/static/js/web/"]');
+  return el ? new URL(el.src).pathname : null;
+}
+
+async function chercherVersionWeb(): Promise<InfoMaj | null> {
+  const actuel = scriptCharge();
+  if (!actuel) return null; // serveur de développement : rien à comparer
+  const r = await fetch(`/?maj=${Date.now()}`, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`Le site a répondu ${r.status}`);
+  const enLigne = MOTIF_SCRIPT.exec(await r.text())?.[0];
+  if (!enLigne || enLigne === actuel) return null;
+  return { numero: 0, nom: 'web', notes: '', urlApk: '' };
+}
 
 type VersionGithub = { tag_name?: string; name?: string; body?: string; assets?: { name?: string; browser_download_url: string }[] };
 
@@ -65,13 +89,23 @@ export function MiseAJourProvider({ children }: { children: ReactNode }) {
   const infoRef = useRef<InfoMaj | null>(null);
 
   const installer = useCallback(() => {
+    // Web : la nouvelle version est déjà en ligne, il suffit de recharger la page.
+    if (web) {
+      window.location.reload();
+      return;
+    }
     const info = infoRef.current;
     // Android télécharge l'APK puis demande de confirmer l'installation (obligatoire hors Play Store).
     if (info) Linking.openURL(info.urlApk).catch(() => {});
   }, []);
 
   const proposer = useCallback(
-    (info: InfoMaj) =>
+    (info: InfoMaj) => {
+      // Alert.alert ne fait rien sur le web : on utilise la boîte de confirmation du navigateur.
+      if (web) {
+        if (window.confirm('Une nouvelle version de Marceau est en ligne. Mettre à jour maintenant ?')) installer();
+        return;
+      }
       Alert.alert(
         'Nouvelle version de Marceau',
         `La version ${info.nom} est prête.${info.notes ? `\n\n${info.notes.slice(0, 300)}` : ''}`,
@@ -79,7 +113,8 @@ export function MiseAJourProvider({ children }: { children: ReactNode }) {
           { text: 'Plus tard', style: 'cancel' },
           { text: 'Installer', onPress: installer },
         ],
-      ),
+      );
+    },
     [installer],
   );
 
@@ -91,8 +126,8 @@ export function MiseAJourProvider({ children }: { children: ReactNode }) {
       }
       setMaj({ etat: 'verification' });
       try {
-        const info = await chercherDerniereVersion();
-        if (info && info.numero > numeroInstalle()) {
+        const info = web ? await chercherVersionWeb() : await chercherDerniereVersion();
+        if (info && (web || info.numero > numeroInstalle())) {
           infoRef.current = info;
           setMaj({ etat: 'disponible', info });
           if (!silencieux) proposer(info);
@@ -110,6 +145,27 @@ export function MiseAJourProvider({ children }: { children: ReactNode }) {
   // Vérification au lancement de l'application.
   useEffect(() => {
     if (verifiable()) verifier();
+  }, [verifier]);
+
+  // Web : l'appli installée peut rester ouverte des jours. On revérifie quand on revient sur la
+  // fenêtre, et toutes les 30 minutes, pour proposer la mise à jour comme dans l'APK.
+  useEffect(() => {
+    if (!web || typeof document === 'undefined') return;
+    let dernier = Date.now();
+    const peutEtre = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - dernier < 5 * 60_000) return;
+      dernier = Date.now();
+      verifier(true);
+    };
+    document.addEventListener('visibilitychange', peutEtre);
+    const minuterie = setInterval(() => {
+      dernier = 0;
+      peutEtre();
+    }, 30 * 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', peutEtre);
+      clearInterval(minuterie);
+    };
   }, [verifier]);
 
   return <MajCtx.Provider value={{ maj, verifier, installer }}>{children}</MajCtx.Provider>;

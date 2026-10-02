@@ -269,6 +269,12 @@ export function PanneauLinux({ couleurs: c, infos, rafraichir }: Base) {
               réserver au Wi-Fi et à un téléphone avec de la place libre.
             </Text>
             <Bouton couleurs={c} libelle="Installer Kali complet (gros)" secondaire onPress={() => installer('full')} />
+
+            <Text style={[styles.corps, { color: c.texte, fontWeight: '700', marginTop: 8 }]}>🐉 Via Termux (le plus fiable)</Text>
+            <Text style={[styles.corps, { color: c.texteDoux }]}>
+              Si l'installation ici n'aboutit pas sur ton téléphone : va dans l'onglet 📦 Termux et touche « Installer
+              Kali » (script officiel de Kali). Ensuite « Ouvrir Kali » l'ouvre d'un toucher.
+            </Text>
           </>
         )}
         {!!erreur && <Text style={[styles.corps, { color: c.danger }]}>Échec : {erreur}</Text>}
@@ -338,6 +344,59 @@ const MAISON_TERMUX = '/data/data/com.termux/files/home';
 /** Fichier où une commande note le numéro de son shell, pour pouvoir l'interrompre (Ctrl+C). */
 const pidTermux = (n: number) => `/data/data/com.termux/files/usr/tmp/marceau-commande-${n}.pid`;
 const guillemets = (t: string) => `'${t.replace(/'/g, `'\\''`)}'`;
+
+/**
+ * Kali Linux installé DANS Termux avec le script officiel de Kali (NetHunter « rootless »).
+ * C'est la méthode la plus fiable sur les téléphones où l'installation intégrée (onglet Linux)
+ * échoue : Termux télécharge et décompresse Kali lui-même, puis Marceau l'ouvre d'un toucher.
+ */
+const INSTALLER_KALI_TERMUX =
+  'pkg install -y wget && wget -O install-nethunter-termux https://offs.ec/2MceZWr && ' +
+  'chmod +x install-nethunter-termux && ./install-nethunter-termux; exec bash -l';
+
+const ouvrirKaliTermux = (root: boolean) =>
+  `if command -v nethunter >/dev/null 2>&1; then exec nethunter${root ? ' -r' : ''}; ` +
+  `else echo "Kali n'est pas encore installé dans Termux."; exec bash -l; fi`;
+
+function BarreKaliTermux({ couleurs: c }: { couleurs: Couleurs }) {
+  // null = vérification en cours ; true/false = le lanceur « nethunter » existe dans Termux.
+  const [kali, setKali] = useState<boolean | null>(null);
+
+  const verifier = useCallback(() => {
+    if (!Terminal) return;
+    setKali(null);
+    Terminal.termux('command -v nethunter >/dev/null 2>&1', MAISON_TERMUX)
+      .then((r) => setKali(!r.erreur && r.code === 0))
+      .catch(() => setKali(false));
+  }, []);
+
+  useEffect(verifier, [verifier]);
+
+  const ouvrir = (script: string) => Terminal?.ouvrirDansTermux(script).catch(() => {});
+
+  return (
+    <View style={[styles.barreAction, { borderColor: c.bordure }]}>
+      <Text style={[styles.petit, { color: c.texteDoux }]} numberOfLines={2}>
+        {kali === null
+          ? '🐉 Kali dans Termux : vérification…'
+          : kali
+            ? '🐉 Kali est installé dans Termux.'
+            : '🐉 Kali (script officiel NetHunter) : quelques Go, en Wi-Fi.'}
+      </Text>
+      {kali ? (
+        <>
+          <Bouton couleurs={c} libelle="Ouvrir Kali" compact onPress={() => ouvrir(ouvrirKaliTermux(false))} />
+          <Bouton couleurs={c} libelle="Root" compact secondaire onPress={() => ouvrir(ouvrirKaliTermux(true))} />
+        </>
+      ) : kali === false ? (
+        <>
+          <Bouton couleurs={c} libelle="Installer Kali" compact onPress={() => ouvrir(INSTALLER_KALI_TERMUX)} />
+          <Bouton couleurs={c} libelle="Vérifier" compact secondaire onPress={verifier} />
+        </>
+      ) : null}
+    </View>
+  );
+}
 
 export function PanneauTermux({ couleurs: c, infos, rafraichir }: Base) {
   const terminal = useRef<PoigneeTerminal>(null);
@@ -459,6 +518,7 @@ export function PanneauTermux({ couleurs: c, infos, rafraichir }: Base) {
 
   return (
     <View style={styles.flex}>
+      <BarreKaliTermux couleurs={c} />
       <View style={[styles.barreAction, { borderColor: c.bordure }]}>
         <Text style={[styles.petit, { color: c.texteDoux }]} numberOfLines={2}>
           Commandes non interactives (ex. pkg install -y python). Pour vim ou htop :

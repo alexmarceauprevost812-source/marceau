@@ -186,12 +186,31 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
                   accessibilityLabel="Clé API"
                 />
                 {f.lienCle && (
-                  <Pressable onPress={() => Linking.openURL(f.lienCle!)} accessibilityRole="link">
-                    <Text style={[styles.lien, { color: c.accentTexte }]}>Obtenir une clé →</Text>
+                  <Pressable
+                    onPress={() => Linking.openURL(f.lienCle!)}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Obtenir ma clé ${f.nom}`}
+                    style={[styles.boutonCle, { borderColor: c.accent }]}
+                  >
+                    <Text style={[styles.lien, { color: c.accentTexte }]}>🔑 Obtenir ma clé {f.nom} →</Text>
                   </Pressable>
                 )}
+                {!!f.etapesCle?.length && (
+                  <View style={styles.etapes}>
+                    <Text style={[styles.aide, { color: c.texte, fontWeight: '700' }]}>
+                      Pas de clé ? Voici comment faire :
+                    </Text>
+                    {f.etapesCle.map((etape, i) => (
+                      <Text key={i} style={[styles.aide, { color: c.texteDoux }]}>
+                        {i + 1}. {etape}
+                      </Text>
+                    ))}
+                  </View>
+                )}
                 <Text style={[styles.aide, { color: c.texteDoux }]}>
-                  Chaque clé reste dans le coffre sécurisé de ton téléphone.
+                  {Platform.OS === 'web'
+                    ? "Ta clé reste dans ce navigateur, sur cet ordinateur. Marceau n'a pas de serveur : elle ne part que vers le fournisseur d'IA choisi."
+                    : "Ta clé reste dans le coffre sécurisé de ton téléphone. Marceau n'a pas de serveur : elle ne part que vers le fournisseur d'IA choisi."}
                 </Text>
               </>
             )}
@@ -310,7 +329,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
                 <Text style={[styles.aide, { color: c.texteDoux }]}>
                   Avec ce jeton, le Codex voit tes dépôts (même privés), les lit au complet et envoie tes changements
                   (commit + push). Crée un jeton « classic » avec la case « repo », ou un jeton « fine-grained » avec
-                  « Contents : Read and write ». Il reste dans le coffre sécurisé du téléphone.
+                  « Contents : Read and write ». Il reste sur ton appareil (coffre sécurisé du téléphone, ou ce navigateur).
                 </Text>
               </>
             )}
@@ -340,6 +359,8 @@ const styles = StyleSheet.create({
   titreBarre: { fontSize: 17, fontWeight: '700' },
   lien: { fontSize: 15, fontWeight: '600' },
   ligneLien: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  boutonCle: { borderWidth: 1.5, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, alignItems: 'center' },
+  etapes: { gap: 4 },
   contenu: { paddingHorizontal: 20, paddingBottom: 40, gap: 10 },
   aide: { fontSize: 14, lineHeight: 20 },
   etiquette: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginTop: 14 },

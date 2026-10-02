@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>%WEB_TITLE%</title>
+    <!-- Appli installable (ordinateur, Android, iPhone) : « Installer » / « Ajouter à l'écran d'accueil ». -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="apple-touch-icon" href="/icones/icone-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Marceau" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>Active JavaScript pour utiliser Marceau.</noscript>
+    <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          // Le nom du script change à chaque version : on le passe au service worker pour que le
+          // navigateur l'installe à nouveau (et prépare le cache hors ligne) à chaque mise à jour.
+          var s = document.querySelector('script[src*="/_expo/static/js/web/"]');
+          var v = s ? s.getAttribute('src').split('/').pop() : '';
+          navigator.serviceWorker.register('/sw.js?v=' + encodeURIComponent(v)).catch(function () {});
+        });
+      }
+    </script>
+  </body>
+</html>

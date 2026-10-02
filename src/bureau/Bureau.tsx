@@ -69,7 +69,9 @@ export function Bureau({ visible, couleurs: c, onOuvrir, onFermer }: Props) {
     maj.etat === 'verification'
       ? 'Recherche de mise à jour…'
       : maj.etat === 'disponible'
-        ? `Nouvelle version prête : ${maj.info.nom} — touche « Mise à jour »`
+        ? maj.info.nom === 'web'
+          ? 'Nouvelle version en ligne — touche « Mise à jour » pour recharger'
+          : `Nouvelle version prête : ${maj.info.nom} — touche « Mise à jour »`
         : maj.etat === 'a-jour'
           ? 'Marceau est à jour'
           : maj.etat === 'erreur'
