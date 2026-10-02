@@ -11,6 +11,10 @@
  * les modèles ci-dessous ne sont que des suggestions de départ.
  */
 
+import { Platform } from 'react-native';
+
+const web = Platform.OS === 'web';
+
 export type IdFournisseur = 'opencode' | 'ollama' | 'anthropic' | 'openai';
 
 /** Format de l'API : OpenAI (/chat/completions) ou Anthropic (/messages). */
@@ -56,9 +60,12 @@ export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
     nom: 'Ollama (local)',
     gratuit: true,
     format: 'openai',
-    description:
-      "Modèles open source sur ton ordinateur. Lance Ollama avec OLLAMA_HOST=0.0.0.0, puis mets l'adresse IP de ton ordi ci-dessous (même Wi-Fi que le téléphone).",
-    urlParDefaut: 'http://192.168.1.10:11434/v1',
+    // Sur le site web (https), le navigateur n'autorise en http que « localhost » : Ollama doit
+    // tourner sur le même ordinateur, et accepter les requêtes venant du site (OLLAMA_ORIGINS).
+    description: web
+      ? 'Modèles open source sur CET ordinateur. Installe Ollama (ollama.com), puis lance-le en autorisant le site : OLLAMA_ORIGINS=* ollama serve (sur Windows : définis la variable OLLAMA_ORIGINS=* puis redémarre Ollama).'
+      : "Modèles open source sur ton ordinateur. Lance Ollama avec OLLAMA_HOST=0.0.0.0, puis mets l'adresse IP de ton ordi ci-dessous (même Wi-Fi que le téléphone).",
+    urlParDefaut: web ? 'http://localhost:11434/v1' : 'http://192.168.1.10:11434/v1',
     modeleParDefaut: 'llama3.2',
     modelesSuggeres: ['llama3.2', 'qwen3', 'qwen2.5-coder', 'gemma3'],
     besoinCle: false,

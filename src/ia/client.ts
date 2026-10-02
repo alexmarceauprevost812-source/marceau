@@ -56,8 +56,30 @@ export async function erreurLisible(reponse: { status: number; text(): Promise<s
   }
 }
 
+/**
+ * Site web servi en https (Vercel) + serveur d'IA en http sur une autre machine : le navigateur
+ * bloque la requête avant même de l'envoyer (« contenu mixte »). Seul « localhost » (le même
+ * ordinateur) est autorisé en http depuis une page https.
+ */
+export function bloqueParNavigateur(c: Connexion): boolean {
+  if (typeof window === 'undefined' || window.location?.protocol !== 'https:') return false;
+  try {
+    const u = new URL(base(c));
+    return u.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function erreurReseau(e: unknown, c: Connexion) {
   if ((e as Error)?.name === 'AbortError') return e as Error;
+  if (bloqueParNavigateur(c)) {
+    return new Error(
+      "Le navigateur bloque cette adresse : le site Marceau est sécurisé (https) et ne peut pas joindre " +
+        "une adresse « http:// » d'un autre appareil. Sur ordinateur, lance Ollama sur CE même ordinateur " +
+        'et mets l\'adresse http://localhost:11434/v1 dans les réglages.',
+    );
+  }
   return new Error(
     "Impossible de joindre le serveur d'IA. Vérifie l'adresse et ta connexion" +
       (c.fournisseur === 'ollama' ? ' (même Wi-Fi que ton ordinateur ?).' : '.'),

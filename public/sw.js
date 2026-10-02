@@ -3,7 +3,7 @@
 // s'ouvre même hors ligne. Les requêtes vers les IA (autres origines, avec la clé API) ne
 // passent JAMAIS par ce cache : elles vont directement du navigateur au fournisseur.
 //
-// Chaque version du site a SON cache (« marceau-<script> »). Une mise à jour remplit un cache
+// Chaque installation du service worker a SON cache (« marceau-<script>-<heure> »). Une mise à jour remplit un cache
 // neuf sans toucher à celui de la version active ; l'ancien n'est supprimé qu'une fois la
 // nouvelle version activée. Un échec en cours de route (connexion coupée, stockage plein…)
 // laisse donc toujours l'ancienne version intacte et utilisable hors ligne.
@@ -38,8 +38,9 @@ async function precharger() {
   if (!script) throw new Error('script principal introuvable dans la page');
   const indispensables = await Promise.all(refs.map(async (u) => [u, await telecharger(u)]));
 
-  const nom = PREFIXE + script.split('/').pop();
-  await caches.delete(nom); // repart d'un cache vide si une tentative précédente a échoué
+  // Nom unique à chaque installation (même si le script n'a pas changé) : on n'écrit JAMAIS
+  // dans le cache de la version active, et on ne le supprime jamais ici.
+  const nom = `${PREFIXE}${script.split('/').pop()}-${Date.now()}`;
   try {
     const cache = await caches.open(nom);
     await cache.put('/', accueil);
