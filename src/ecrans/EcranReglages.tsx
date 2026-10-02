@@ -191,7 +191,9 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
                   </Pressable>
                 )}
                 <Text style={[styles.aide, { color: c.texteDoux }]}>
-                  Chaque clé reste dans le coffre sécurisé de ton téléphone.
+                  {Platform.OS === 'web'
+                    ? "Ta clé reste dans ce navigateur, sur cet ordinateur. Marceau n'a pas de serveur : elle ne part que vers le fournisseur d'IA choisi."
+                    : "Ta clé reste dans le coffre sécurisé de ton téléphone. Marceau n'a pas de serveur : elle ne part que vers le fournisseur d'IA choisi."}
                 </Text>
               </>
             )}
@@ -310,7 +312,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
                 <Text style={[styles.aide, { color: c.texteDoux }]}>
                   Avec ce jeton, le Codex voit tes dépôts (même privés), les lit au complet et envoie tes changements
                   (commit + push). Crée un jeton « classic » avec la case « repo », ou un jeton « fine-grained » avec
-                  « Contents : Read and write ». Il reste dans le coffre sécurisé du téléphone.
+                  « Contents : Read and write ». Il reste sur ton appareil (coffre sécurisé du téléphone, ou ce navigateur).
                 </Text>
               </>
             )}
