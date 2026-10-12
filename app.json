@@ -78,7 +78,14 @@
           "cameraPermission": "Marceau utilise l'appareil photo pour montrer une photo à l'IA."
         }
       ],
-      "./modules/marceau-terminal/app.plugin.js"
+      "./modules/marceau-terminal/app.plugin.js",
+      [
+        "llama.rn",
+        {
+          "enableOpenCLAndHexagon": false,
+          "forceCxx20": true
+        }
+      ]
     ],
     "extra": {
       "eas": {

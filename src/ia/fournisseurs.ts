@@ -15,7 +15,7 @@ import { Platform } from 'react-native';
 
 const web = Platform.OS === 'web';
 
-export type IdFournisseur = 'opencode' | 'ollama' | 'anthropic' | 'openai';
+export type IdFournisseur = 'opencode' | 'ollama' | 'anthropic' | 'openai' | 'local';
 
 /** Format de l'API : OpenAI (/chat/completions) ou Anthropic (/messages). */
 export type FormatAPI = 'openai' | 'anthropic';
@@ -36,6 +36,11 @@ export type Fournisseur = {
 };
 
 export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
+  local: {
+    id: 'local', nom: 'IA embarquée (hors ligne)', gratuit: true, format: 'openai',
+    description: 'Télécharge une fois un modèle gratuit, rapide (1,84 Go) ou plus puissant (2,50 Go). Chat et Codex tournent ensuite sur cet appareil, sans réseau ni clé API. Texte et code uniquement.',
+    urlParDefaut: '', modeleParDefaut: 'qwen3-1.7b', modelesSuggeres: ['qwen3-1.7b', 'qwen3-4b'], besoinCle: false,
+  },
   opencode: {
     id: 'opencode',
     nom: 'OpenCode Zen',
@@ -92,11 +97,11 @@ export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
   },
   openai: {
     id: 'openai',
-    nom: 'OpenAI (Codex)',
+    nom: 'ChatGPT / Codex (clé API OpenAI)',
     gratuit: false,
     format: 'openai',
     description:
-      'GPT et Codex avec ta propre clé API OpenAI. Payant à l’usage, facturé sur ton compte OpenAI.',
+      'Modèles OpenAI avec ta clé API. Facturation à l’usage, distincte de l’abonnement ChatGPT.',
     urlParDefaut: 'https://api.openai.com/v1',
     modeleParDefaut: 'gpt-5.3-codex',
     modelesSuggeres: ['gpt-5.3-codex', 'gpt-5.5', 'gpt-5-mini'],
@@ -112,7 +117,7 @@ export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
   },
 };
 
-export const ORDRE_FOURNISSEURS: IdFournisseur[] = ['opencode', 'ollama', 'anthropic', 'openai'];
+export const ORDRE_FOURNISSEURS: IdFournisseur[] = ['local', 'opencode', 'ollama', 'anthropic', 'openai'];
 
 /** Réglages d'un fournisseur. */
 export type ConfigFournisseur = { url: string; modele: string; cle: string };
@@ -145,6 +150,7 @@ export function reglagesParDefaut(): ReglagesIA {
     actifCodex: 'anthropic',
     jetonGithub: '',
     configs: {
+      local: configParDefaut('local'),
       opencode: configParDefaut('opencode'),
       ollama: configParDefaut('ollama'),
       anthropic: configParDefaut('anthropic'),

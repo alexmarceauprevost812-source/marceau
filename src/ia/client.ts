@@ -1,4 +1,7 @@
 import { fetch as fetchExpo } from 'expo/fetch';
+import { repondreLocal } from './moteurLocal';
+import { verifierModele } from './modeleLocal';
+import { MODELES_LOCAUX } from './catalogueLocal';
 
 import { FOURNISSEURS, type Connexion, type FormatAPI } from './fournisseurs';
 import { lireBase64, type PieceJointe } from './pieces';
@@ -142,6 +145,15 @@ export async function versAPI(messages: MessageIA[], format: FormatAPI): Promise
 
 /** Envoie une conversation à l'IA et renvoie la réponse complète (en direct si onMorceau est fourni). */
 export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<string> {
+  if (c.fournisseur === 'local') {
+    if (o.messages.some(m => m.pieces?.some(p => p.type === 'image' || p.type === 'pdf'))) {
+      throw new Error('Le modèle local lit le texte et le code. Retire les images et PDF ou choisis un fournisseur compatible.');
+    }
+    return repondreLocal({ ...o, modele: c.modele, messages: [
+      { role: 'system', content: o.systeme || 'Réponds en français, clairement et précisément.' },
+      ...o.messages.map(m => ({ role: m.role, content: texteAvecFichiers(m) })),
+    ] });
+  }
   const format = FOURNISSEURS[c.fournisseur].format;
   const enDirect = !!o.onMorceau;
   const messages = await versAPI(o.messages, format);
@@ -280,6 +292,10 @@ function texteDeReponse(brut: string, format: FormatAPI): string {
 
 /** Liste les modèles proposés par le serveur. */
 export async function listerModeles(c: Connexion): Promise<string[]> {
+  if (c.fournisseur === 'local') {
+    const disponibles = await Promise.all(MODELES_LOCAUX.map(async m => (await verifierModele(m.id)) ? m.id : null));
+    return disponibles.filter(id => id !== null);
+  }
   let reponse: Awaited<ReturnType<typeof fetchExpo>>;
   try {
     reponse = await fetchExpo(`${base(c)}/models?limit=100`, { headers: entetes(c) });

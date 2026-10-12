@@ -1,0 +1,129 @@
+name: Marceau local — APK et clé USB
+on:
+  push:
+    branches: [codex/ia-locale-apk]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:local
+      - name: Contrôler les modules locaux
+        run: npx eslint src/ia/InstallationLocale.tsx src/ia/catalogueLocal.ts src/ia/modeleLocal* src/ia/moteurLocal* src/ia/bureauLocal.ts src/ia/client.ts src/ia/fournisseurs.ts
+      - name: Exporter l’interface Marceau
+        run: npx expo export --platform web --output-dir bureau/web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: interface-marceau
+          path: bureau/web/
+  apk:
+    needs: verifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
+      - run: npm ci
+      - name: Préparer un APK autonome de test
+        run: |
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('app.json'));x.expo.name='Marceau Local';x.expo.android.package='org.marceau.local';x.expo.android.versionCode=Number(process.env.GITHUB_RUN_NUMBER)+1;fs.writeFileSync('app.json',JSON.stringify(x,null,2));"
+          npx expo prebuild --platform android --no-install
+      - name: Compiler le terminal embarqué
+        run: bash scripts/construire-linux.sh
+      - name: Construire l’APK avec son JavaScript intégré
+        working-directory: android
+        run: ./gradlew --no-daemon assembleRelease -PreactNativeArchitectures=arm64-v8a
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Marceau-Local-Android-Samsung
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+      - name: Fournir les sources des composants GPL
+        run: bash scripts/construire-linux.sh --sources
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sources-terminal-linux
+          path: build/linux/marceau-sources-linux.tar.gz
+          if-no-files-found: error
+  bureau:
+    needs: verifier
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      CMAKE_ARGS: '-DGGML_NATIVE=OFF -DGGML_METAL=OFF -DGGML_OPENMP=OFF'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: interface-marceau
+          path: bureau/web
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Tester les fichiers et l’accès local
+        run: python -m unittest discover -s bureau -p "test_*.py" -v
+      - name: Installer le moteur et le constructeur
+        run: python -m pip install pyinstaller==6.16.0 llama-cpp-python==0.3.16
+      - name: Construire le paquet USB
+        run: python -m PyInstaller --noconfirm --clean --onefile --name Marceau-USB --collect-all llama_cpp --add-data "bureau/web:web" --add-data "bureau/modeles-locaux.json:." bureau/marceau_bureau.py
+      - name: Ajouter le guide
+        shell: bash
+        run: |
+          cp bureau/LIRE-MOI-USB.md dist/
+          cp licences/llama-cpp-MIT.txt dist/
+          cp licences/llama-rn-MIT.txt dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Marceau-USB-${{ matrix.os }}
+          path: dist/
+          if-no-files-found: error
+  telechargements:
+    needs: [apk, bureau]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+      - name: Préparer les fichiers à télécharger
+        run: python bureau/emballer.py artefacts paquets
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ia-locale-test-${{ github.run_number }}
+          name: Marceau Local — test ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          body: |
+            Interface Marceau avec moteur local Android et PC. Extraire le paquet correspondant à ton appareil.
+            Les modèles se téléchargent ensuite une seule fois depuis Réglages IA.
+            Version de test ; les performances sur Samsung restent à vérifier. L’APK Marceau Local est distinct de Marceau déjà installé.
+          files: |
+            paquets/*.zip
+            artefacts/sources-terminal-linux/marceau-sources-linux.tar.gz

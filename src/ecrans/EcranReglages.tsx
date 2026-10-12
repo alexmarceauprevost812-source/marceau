@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { InstallationLocale } from '../ia/InstallationLocale';
+import { suivreLocal, etatLocal } from '../ia/modeleLocal';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -27,6 +29,9 @@ type Props = { visible: boolean; couleurs: Couleurs; onFermer: () => void; espac
 /** Choix du fournisseur d'IA, du modèle et des clés API. */
 export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 'chat' }: Props) {
   const { reglages, enregistrer } = useReglagesIA();
+  const reglagesActuels = useRef(reglages);
+  useEffect(() => { reglagesActuels.current = reglages; }, [reglages]);
+  useSyncExternalStore(suivreLocal, () => [etatLocal('qwen3-1.7b').phase === 'pret', etatLocal('qwen3-4b').phase === 'pret'].join(','));
   const [brouillon, setBrouillon] = useState<ReglagesIA>(reglages);
   const [modeles, setModeles] = useState<string[] | null>(null);
   const [chargement, setChargement] = useState(false);
@@ -138,7 +143,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
             {ORDRE_FOURNISSEURS.map((cle) => {
               const four = FOURNISSEURS[cle];
               const actif = cle === id;
-              const pret = !four.besoinCle || !!brouillon.configs[cle].cle.trim();
+              const pret = cle === 'local' ? etatLocal(brouillon.configs.local.modele).phase === 'pret' : !four.besoinCle || !!brouillon.configs[cle].cle.trim();
               return (
                 <Pressable
                   key={cle}
@@ -157,7 +162,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
                   <View style={styles.flex}>
                     <Text style={[styles.nomOption, { color: c.texte }]}>{four.nom}</Text>
                     <Text style={{ color: c.texteDoux, fontSize: 13 }}>
-                      {four.gratuit ? 'Gratuit' : 'Ta clé API'} · {pret ? 'prêt' : 'clé à ajouter'}
+                      {four.gratuit ? 'Gratuit' : 'Ta clé API'} · {pret ? 'prêt' : cle === 'local' ? 'modèle à installer' : 'clé à ajouter'}
                     </Text>
                   </View>
                   {four.gratuit && (
@@ -171,6 +176,23 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
 
             <Text style={[styles.aide, { color: c.texteDoux }]}>{f.description}</Text>
 
+            {id === 'local' && <InstallationLocale couleurs={c} modele={config.modele}
+              onModele={m => changer('modele', m)}
+              onPret={async m => {
+                const courant = reglagesActuels.current;
+                const nouveau: ReglagesIA = { ...courant,
+                  ...(espace === 'codex' ? { actifCodex: 'local' as const } : { actif: 'local' as const }),
+                  configs: { ...courant.configs, local: { ...courant.configs.local, modele: m } },
+                };
+                await enregistrer(nouveau); setBrouillon(nouveau); setMessage('IA locale activée pour cet espace.');
+              }} />}
+            {id === 'openai' && <View style={{ gap: 8, marginVertical: 12 }}>
+              <Pressable onPress={() => Linking.openURL('https://chatgpt.com/')} accessibilityRole="link"
+                style={[styles.bouton, { backgroundColor: c.carte, borderColor: c.accent, borderWidth: 1 }]}>
+                <Text style={{ color: c.accentTexte, fontWeight: '700' }}>Ouvrir ChatGPT avec mon compte</Text>
+              </Pressable>
+              <Text style={{ color: c.texteDoux }}>Ce bouton ouvre ChatGPT séparément. L’utilisation de ton abonnement directement dans Marceau nécessite un accès officiel partenaire ; elle n’est pas encore activée. La clé API ci-dessous utilise la facturation API.</Text>
+            </View>}
             {f.besoinCle && (
               <>
                 <Text style={[styles.etiquette, { color: c.texteDoux }]}>CLÉ API {f.gratuit ? '(GRATUITE)' : ''}</Text>
@@ -215,6 +237,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
               </>
             )}
 
+            {id !== 'local' && <>
             <Text style={[styles.etiquette, { color: c.texteDoux }]}>MODÈLE</Text>
             <TextInput
               value={config.modele}
@@ -259,6 +282,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
               accessibilityLabel="Adresse du serveur"
             />
 
+            </>}
             {espace === 'codex' && (
               <>
                 <Text style={[styles.etiquette, { color: c.texteDoux }]}>GITHUB (LIRE ET ÉCRIRE TES PROJETS)</Text>

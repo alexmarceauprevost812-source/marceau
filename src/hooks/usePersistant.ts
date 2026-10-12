@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
+import { appelBureau, bureauLocalDisponible } from '../ia/bureauLocal';
 
 let alerteAffichee = false;
 
@@ -15,7 +16,7 @@ function signalerEchec() {
   alerteAffichee = true;
   Alert.alert(
     'Enregistrement impossible',
-    "Tes dernières modifications n'ont pas pu être enregistrées sur le téléphone (espace de stockage plein ?). " +
+    "Tes dernières modifications n'ont pas pu être enregistrées sur cet appareil ou la clé USB (espace de stockage plein ?). " +
       'Elles seront perdues à la fermeture de l’application. Libère de la place ou supprime d’anciennes discussions ou projets.',
   );
 }
@@ -23,7 +24,8 @@ function signalerEchec() {
 /** Enregistre une petite valeur (tâches, réglages) dans AsyncStorage, en signalant les échecs. */
 export async function sauvegarder(cle: string, valeur: unknown) {
   try {
-    await AsyncStorage.setItem(cle, JSON.stringify(valeur));
+    if (bureauLocalDisponible()) await appelBureau('stockage/ecrire', { cle, valeur: JSON.stringify(valeur) });
+    else await AsyncStorage.setItem(cle, JSON.stringify(valeur));
     alerteAffichee = false;
   } catch {
     signalerEchec();
@@ -39,6 +41,7 @@ function fichier(cle: string) {
 }
 
 async function lire(cle: string): Promise<string | null> {
+  if (bureauLocalDisponible()) return (await (await appelBureau('stockage/lire', { cle })).json()).valeur as string | null;
   if (Platform.OS === 'web') return AsyncStorage.getItem(cle);
   const f = fichier(cle);
   if (f.exists) return f.text();
@@ -47,6 +50,7 @@ async function lire(cle: string): Promise<string | null> {
 }
 
 async function ecrire(cle: string, valeur: string) {
+  if (bureauLocalDisponible()) { await appelBureau('stockage/ecrire', { cle, valeur }); return; }
   if (Platform.OS === 'web') return AsyncStorage.setItem(cle, valeur);
   // On écrit d'abord un fichier temporaire, puis on le renomme : si l'écriture échoue
   // (stockage plein, appli fermée…), l'ancien fichier reste intact.
@@ -69,6 +73,7 @@ export async function lirePersistant<T>(cle: string): Promise<T | null> {
 /** Efface une valeur enregistrée (fichier + ancien AsyncStorage). */
 export async function effacerPersistant(cle: string): Promise<void> {
   try {
+    if (bureauLocalDisponible()) { await appelBureau('stockage/effacer', { cle }); return; }
     if (Platform.OS !== 'web') {
       const f = fichier(cle);
       if (f.exists) f.delete();

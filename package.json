@@ -23,6 +23,7 @@
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "llama.rn": "0.13.0-rc.7",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -32,18 +33,22 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "postinstall": "node scripts/xterm-bundle.js && node scripts/licences.js",
     "preparer-linux": "bash scripts/construire-linux.sh",
     "eas-build-post-install": "bash scripts/construire-linux.sh",
-    "sources-linux": "bash scripts/construire-linux.sh --sources"
+    "sources-linux": "bash scripts/construire-linux.sh --sources",
+    "lint": "expo lint",
+    "test:local": "node --test tests/ia-locale.test.cjs"
   },
   "private": true
 }

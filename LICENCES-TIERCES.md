@@ -29,3 +29,7 @@ installation quand Kali en publie une pour ce fichier.
 React Native, Expo et leurs dépendances (environ 490 paquets) : licences libres (surtout MIT, ISC,
 Apache-2.0, BSD). La liste exacte est générée à chaque build par [scripts/licences.js](scripts/licences.js)
 et affichée dans l'appli.
+
+## IA locale
+
+Le moteur Android utilise llama.rn et llama.cpp (MIT), dont les textes sont dans `licences/`. La version bureau utilise llama-cpp-python et llama.cpp (MIT). Les poids Qwen sont téléchargés séparément sous Apache-2.0 ; les sources et empreintes figurent dans `bureau/modeles-locaux.json`.

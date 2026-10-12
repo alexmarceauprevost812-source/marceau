@@ -1,0 +1,20 @@
+[
+  {
+    "id": "qwen3-1.7b",
+    "nom": "Qwen3 1.7B • rapide",
+    "description": "Textes courts et petits projets. Premier modèle conseillé.",
+    "taille": 1834426016,
+    "url": "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/90862c4b9d2787eaed51d12237eafdfe7c5f6077/Qwen3-1.7B-Q8_0.gguf",
+    "sha256": "061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a",
+    "licence": "Apache-2.0"
+  },
+  {
+    "id": "qwen3-4b",
+    "nom": "Qwen3 4B • plus capable",
+    "description": "Option plus puissante pour le S25 Ultra et les PC. Plus lente ; performances à vérifier sur ton appareil.",
+    "taille": 2497281120,
+    "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+    "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+    "licence": "Apache-2.0"
+  }
+]

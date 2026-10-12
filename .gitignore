@@ -49,3 +49,12 @@ modules/marceau-terminal/android/.cxx/
 # Généré : liste des licences, compilation de PRoot
 src/licences/generees.ts
 /build/
+
+# Paquets portables générés et modèles volumineux
+bureau/web/
+bureau/modeles/
+bureau/donnees/
+__pycache__/
+*.pyc
+*.gguf
+*.part

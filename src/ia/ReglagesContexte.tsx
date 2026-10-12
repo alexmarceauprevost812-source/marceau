@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { sauvegarder } from '../hooks/usePersistant';
+import { sauvegarder, lirePersistant } from '../hooks/usePersistant';
 
 import { effacerSecret, ecrireSecret, lireSecret } from './coffre';
 
@@ -48,11 +47,10 @@ export function ReglagesIAProvider({
     (async () => {
       const defaut = reglagesParDefaut();
       try {
-        const brut = await AsyncStorage.getItem(CLE_REGLAGES);
-        const lu = brut ? JSON.parse(brut) : {};
+        const lu = (await lirePersistant<Partial<ReglagesIA>>(CLE_REGLAGES)) ?? {};
         const r: ReglagesIA = {
-          actif: ORDRE_FOURNISSEURS.includes(lu.actif) ? lu.actif : defaut.actif,
-          actifCodex: ORDRE_FOURNISSEURS.includes(lu.actifCodex) ? lu.actifCodex : defaut.actifCodex,
+          actif: lu.actif && ORDRE_FOURNISSEURS.includes(lu.actif) ? lu.actif : defaut.actif,
+          actifCodex: lu.actifCodex && ORDRE_FOURNISSEURS.includes(lu.actifCodex) ? lu.actifCodex : defaut.actifCodex,
           configs: { ...defaut.configs },
           jetonGithub: (await lireSecret(CLE_GITHUB)) ?? '',
         };

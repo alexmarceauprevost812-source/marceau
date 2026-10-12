@@ -33,6 +33,7 @@ import { EnvoiGithub } from './EnvoiGithub';
 
 /** Taille du projet envoyée à l'IA (Claude accepte beaucoup plus de contexte). */
 function limiteContexte(fournisseur: string) {
+  if (fournisseur === 'local') return 10000;
   return fournisseur === 'anthropic' ? 400_000 : fournisseur === 'openai' ? 200_000 : 60_000;
 }
 
