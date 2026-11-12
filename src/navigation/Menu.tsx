@@ -6,10 +6,11 @@ import { IconeBureau } from '../bureau/Bureau';
 import { IMAGES } from '../images';
 import type { Couleurs } from '../theme';
 
-export type Section = 'chat' | 'codex' | 'projet' | 'terminal' | 'commandes' | 'agenda' | 'carte' | 'notes' | 'reveil' | 'parametres' | 'preferences';
+export type Section = 'chat' | 'codex' | 'projet' | 'terminal' | 'commandes' | 'agenda' | 'carte' | 'notes' | 'reveil' | 'parametres' | 'preferences' | 'web';
 
 export const SECTIONS: { cle: Section; icone: string; libelle: string }[] = [
   { cle: 'chat', icone: '💬', libelle: 'Chat' },
+  { cle: 'web', icone: '🌐', libelle: 'Web' },
   { cle: 'codex', icone: '</>', libelle: 'Codex' },
   { cle: 'projet', icone: '📁', libelle: 'Projet' },
   { cle: 'terminal', icone: '>_', libelle: 'Terminal' },
