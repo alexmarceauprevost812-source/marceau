@@ -2,14 +2,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { lexosDisponible } from '../../modules/lexos-terminal';
 import { Terminal, type InfosTerminal } from '../../modules/marceau-terminal';
+import { PanneauLexos } from '../terminal/PanneauLexos';
 import { PanneauLinux, PanneauTelephone, PanneauTermux } from '../terminal/Panneaux';
 import type { Couleurs } from '../theme';
 import { Entete } from '../ui/Entete';
 
-type Onglet = 'linux' | 'termux' | 'telephone';
+type Onglet = 'linux' | 'lexos' | 'termux' | 'telephone';
 const ONGLETS: { cle: Onglet; libelle: string }[] = [
   { cle: 'linux', libelle: '🐧 Linux' },
+  { cle: 'lexos', libelle: '⚡ LexOS' },
   { cle: 'termux', libelle: '📦 Termux' },
   { cle: 'telephone', libelle: '📱 Téléphone' },
 ];
@@ -50,7 +53,7 @@ export function EcranTerminal({ couleurs: c }: { couleurs: Couleurs }) {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Entete couleurs={c} titre="Terminal" />
       <View style={styles.onglets} accessibilityRole="tablist">
-        {ONGLETS.map(({ cle, libelle }) => {
+        {ONGLETS.filter(({ cle }) => cle !== 'lexos' || lexosDisponible()).map(({ cle, libelle }) => {
           const actif = onglet === cle;
           return (
             <Pressable
@@ -69,6 +72,11 @@ export function EcranTerminal({ couleurs: c }: { couleurs: Couleurs }) {
       {visites.has('linux') && (
         <View style={[styles.flex, onglet !== 'linux' && styles.cache]}>
           <PanneauLinux couleurs={c} infos={infos} rafraichir={rafraichir} />
+        </View>
+      )}
+      {visites.has('lexos') && (
+        <View style={[styles.flex, onglet !== 'lexos' && styles.cache]}>
+          <PanneauLexos couleurs={c} />
         </View>
       )}
       {visites.has('termux') && (
