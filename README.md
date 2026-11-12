@@ -53,6 +53,32 @@ un jeton *classic* avec la case `repo`, ou un jeton *fine-grained* avec « Conte
 d'OpenCode Zen, vos requêtes peuvent servir à améliorer ces modèles ; avec Ollama, rien
 ne quitte votre réseau.
 
+## Recherche Web avec un GGUF local
+
+Dans **Bureau → Web**, entre l’adresse de ton instance [SearXNG](https://docs.searxng.org/dev/search_api.html).
+Active le format `json` dans sa configuration `search.formats`. SearXNG et les moteurs
+qu’il utilise reçoivent les mots-clés. Marceau garde l’adresse du moteur sur l’appareil.
+Les mots-clés, les résultats et les résumés sont effacés à la fermeture de l’écran Web.
+
+Dans **Paramètres → Ollama**, configure ton serveur et choisis un modèle déjà installé.
+Si tu as seulement un fichier GGUF, crée un `Modelfile` avec
+`FROM /chemin/vers/mon-modele.gguf`, puis exécute sur le PC :
+
+```bash
+ollama create marceau-gguf -f Modelfile
+```
+
+Sélectionne ensuite `marceau-gguf` dans Marceau. Pour forcer Ollama à utiliser uniquement
+ses fonctions locales, active `OLLAMA_NO_CLOUD=1` dans le service Ollama et redémarre-le.
+Voir la [documentation Ollama](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features).
+
+Après la recherche, tu peux synthétiser les extraits ou toucher un résultat pour voir
+le texte de la page et le résumer. Les résumés utilisent la connexion Ollama de Marceau.
+L’aperçu prend en charge les pages HTML et le texte brut accessibles sans connexion.
+Une page dynamique, un PDF ou une page bloquée reste accessible via le lien original.
+Si tu utilises Marceau dans un navigateur, la politique CORS du moteur ou du site peut
+bloquer la lecture. Essaie l’application Android ou iOS dans ce cas.
+
 ## Essayer l'application
 
 Prérequis : [Node.js](https://nodejs.org) 20 ou plus récent.
