@@ -15,6 +15,7 @@ export type AppBureau = {
 
 export const APPLICATIONS: AppBureau[] = [
   { id: 'chat', nom: 'Chat', icone: '💬', couleur: '#FF8A1F', ouvre: 'chat' },
+  { id: 'web', nom: 'Web', icone: '🌐', couleur: '#087A80', ouvre: 'web' },
   { id: 'codex', nom: 'Codex', icone: '💻', couleur: '#2F6FEB', ouvre: 'codex' },
   { id: 'projet', nom: 'Projet', icone: '📁', couleur: '#1F9D55', ouvre: 'projet' },
   { id: 'terminal', nom: 'Terminal', icone: '⌨️', couleur: '#1B1B1B', ouvre: 'terminal' },

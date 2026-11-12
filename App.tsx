@@ -14,6 +14,7 @@ import { EcranReveil } from './src/ecrans/EcranReveil';
 import { EcranPreferences } from './src/ecrans/EcranPreferences';
 import { EcranReglages } from './src/ecrans/EcranReglages';
 import { EcranTerminal } from './src/ecrans/EcranTerminal';
+import { EcranWeb } from './src/ecrans/EcranWeb';
 import { EcranTaches } from './src/ecrans/EcranTaches';
 import type { Espace } from './src/ia/fournisseurs';
 import { ReglagesIAProvider } from './src/ia/ReglagesContexte';
@@ -24,7 +25,7 @@ import { useCouleurs, useModeNuit } from './src/theme';
 import { Reactions } from './src/ui/Avatar';
 import { Ouverture } from './src/ui/Ouverture';
 
-type Ecran = Exclude<Section, 'agenda' | 'carte' | 'notes' | 'reveil' | 'commandes' | 'parametres' | 'preferences'>;
+type Ecran = Exclude<Section, 'agenda' | 'carte' | 'notes' | 'reveil' | 'commandes' | 'parametres' | 'preferences' | 'web'>;
 
 export default function App() {
   const couleurs = useCouleurs();
@@ -34,6 +35,7 @@ export default function App() {
   const [carteOuverte, setCarteOuverte] = useState(false);
   const [notesOuvertes, setNotesOuvertes] = useState(false);
   const [reveilOuvert, setReveilOuvert] = useState(false);
+  const [webOuvert, setWebOuvert] = useState(false);
   const [commandesOuvertes, setCommandesOuvertes] = useState(false);
   // L'application s'ouvre toujours sur le Chat.
   const [ecran, setEcran] = useState<Ecran>('chat');
@@ -60,6 +62,7 @@ export default function App() {
     if (s === 'parametres') setReglagesOuverts(ecran === 'codex' ? 'codex' : 'chat');
     else if (s === 'preferences') setPreferencesOuvertes(true);
     else if (s === 'agenda') setAgendaOuvert(true);
+    else if (s === 'web') setWebOuvert(true);
     else if (s === 'carte') setCarteOuverte(true);
     else if (s === 'notes') setNotesOuvertes(true);
     else if (s === 'reveil') setReveilOuvert(true);
@@ -119,6 +122,7 @@ export default function App() {
           <EcranReveil visible={reveilOuvert} couleurs={couleurs} onFermer={() => setReveilOuvert(false)} />
           <EcranCommandes visible={commandesOuvertes} couleurs={couleurs} onFermer={() => setCommandesOuvertes(false)} />
           <EcranCarte visible={carteOuverte} couleurs={couleurs} onFermer={() => setCarteOuverte(false)} />
+          <EcranWeb visible={webOuvert} couleurs={couleurs} onFermer={() => setWebOuvert(false)} />
           {/* Le verrou reste monté en permanence (sécurité) : il ne faut jamais laisser voir le Chat
               sans lui. L'écran d'ouverture est lui-même un Modal rendu par-dessus, donc l'animation
               s'affiche au premier plan sans démonter le verrou. */}

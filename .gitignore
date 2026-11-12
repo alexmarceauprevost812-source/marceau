@@ -49,3 +49,8 @@ modules/marceau-terminal/android/.cxx/
 # Généré : liste des licences, compilation de PRoot
 src/licences/generees.ts
 /build/
+
+# Terminal LexOS (fork de Termux) : fichiers générés pendant le build
+modules/lexos-terminal/android/**/build/
+modules/lexos-terminal/android/**/.cxx/
+modules/lexos-terminal/android/app/src/main/cpp/bootstrap-*.zip

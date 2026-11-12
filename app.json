@@ -80,7 +80,8 @@
         }
       ],
       "llama.rn",
-      "./modules/marceau-terminal/app.plugin.js"
+      "./modules/marceau-terminal/app.plugin.js",
+      "./modules/lexos-terminal/app.plugin.js"
     ],
     "extra": {
       "eas": {

@@ -1,0 +1,126 @@
+// Module Expo « lexos-terminal » : le moteur du terminal LexOS (fork de Termux, GPLv3) greffé dans Marceau.
+// Le code de l'ancienne application (dossier app/) devient une bibliothèque ; les trois autres sous-projets
+// (terminal-emulator, terminal-view, termux-shared) sont déclarés par app.plugin.js (settings.gradle).
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'org.marceau'
+version = '0.118.0'
+
+ext {
+  // Variante du bootstrap : doit être gérée par com.termux.shared.termux.TermuxBootstrap.PackageVariant
+  packageVariant = System.getenv("TERMUX_PACKAGE_VARIANT") ?: "apt-android-7"
+}
+
+android {
+  namespace "com.termux"
+  if (rootProject.hasProperty("ndkVersion")) {
+    ndkVersion rootProject.ext.ndkVersion
+  }
+
+  sourceSets {
+    main {
+      manifest.srcFile 'app/src/main/AndroidManifest.xml'
+      java.srcDirs = ['app/src/main/java']
+      res.srcDirs = ['app/src/main/res']
+    }
+  }
+
+  defaultConfig {
+    versionCode 118
+    versionName '0.118.0'
+    buildConfigField "String", "TERMUX_PACKAGE_VARIANT", "\"" + project.ext.packageVariant + "\""
+    manifestPlaceholders = [
+      TERMUX_PACKAGE_NAME       : "org.marceau.app",
+      TERMUX_APP_NAME           : "LexOS Terminal",
+      TERMUX_API_APP_NAME       : "LexOS Terminal:API",
+      TERMUX_BOOT_APP_NAME      : "LexOS Terminal:Boot",
+      TERMUX_FLOAT_APP_NAME     : "LexOS Terminal:Float",
+      TERMUX_STYLING_APP_NAME   : "LexOS Terminal:Styling",
+      TERMUX_TASKER_APP_NAME    : "LexOS Terminal:Tasker",
+      TERMUX_WIDGET_APP_NAME    : "LexOS Terminal:Widget",
+    ]
+    externalNativeBuild {
+      ndkBuild {
+        cFlags "-std=c11", "-Wall", "-Wextra", "-Werror", "-Os", "-fno-stack-protector", "-Wl,--gc-sections"
+      }
+    }
+  }
+
+  externalNativeBuild {
+    ndkBuild {
+      path "app/src/main/cpp/Android.mk"
+    }
+  }
+
+  compileOptions {
+    coreLibraryDesugaringEnabled true
+    sourceCompatibility JavaVersion.VERSION_1_8
+    targetCompatibility JavaVersion.VERSION_1_8
+  }
+
+  buildFeatures {
+    buildConfig true
+  }
+
+  lint {
+    disable 'ProtectedPermissions'
+  }
+}
+
+dependencies {
+  implementation "androidx.annotation:annotation:1.9.0"
+  implementation "androidx.core:core:1.13.1"
+  implementation "androidx.drawerlayout:drawerlayout:1.2.0"
+  implementation "androidx.preference:preference:1.2.1"
+  implementation "androidx.viewpager:viewpager:1.0.0"
+  implementation "com.google.android.material:material:1.12.0"
+  implementation "com.google.guava:guava:24.1-jre"
+  implementation "io.noties.markwon:core:4.6.2"
+  implementation "io.noties.markwon:ext-strikethrough:4.6.2"
+  implementation "io.noties.markwon:linkify:4.6.2"
+  implementation "io.noties.markwon:recycler:4.6.2"
+  implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
+  coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.1.5"
+
+  implementation project(":terminal-view")
+  implementation project(":termux-shared")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Bootstrap (shell, apt, paquets) compilé pour /data/data/org.marceau.app/files/usr.
+// Le fichier bootstrap-aarch64.zip est téléchargé par scripts/telecharger-bootstrap.sh (étape
+// eas-build-post-install) dans modules/lexos-terminal/bootstrap/. Sans lui, l'APK se construit quand
+// même, avec des archives vides : l'onglet LexOS annonce alors que le terminal n'est pas installé.
+// ---------------------------------------------------------------------------------------------
+def dossierBootstrap = new File(projectDir.parentFile, "bootstrap")
+
+task preparerBootstraps {
+  doLast {
+    def sortie = new File(projectDir, "app/src/main/cpp")
+    ["aarch64", "arm", "i686", "x86_64"].each { arch ->
+      def src = new File(dossierBootstrap, "bootstrap-" + arch + ".zip")
+      def dst = new File(sortie, "bootstrap-" + arch + ".zip")
+      if (src.isFile()) {
+        java.nio.file.Files.copy(src.toPath(), dst.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+      } else {
+        // Archive vide valide (le code C en embarque une par architecture)
+        new java.util.zip.ZipOutputStream(new FileOutputStream(dst)).withCloseable { z ->
+          z.putNextEntry(new java.util.zip.ZipEntry("SYMLINKS.txt")); z.closeEntry()
+        }
+        if (arch == "aarch64") {
+          logger.warn("LEXOS ATTENTION : bootstrap-aarch64.zip introuvable dans " + dossierBootstrap +
+            " -> le terminal LexOS sera vide. Voir modules/lexos-terminal/BOOTSTRAP.md.")
+        }
+      }
+    }
+  }
+}
+
+tasks.configureEach { t ->
+  if (t.name.startsWith("externalNativeBuild") || t.name.startsWith("configureNdkBuild") || t.name.startsWith("buildNdkBuild")) {
+    t.dependsOn(preparerBootstraps)
+  }
+}
