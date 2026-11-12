@@ -158,3 +158,29 @@ librement ce logiciel.
 
 L'APK contient aussi d'autres logiciels libres (PRoot sous GPL-2.0, talloc sous LGPL-3.0, etc.) :
 voir [LICENCES-TIERCES.md](LICENCES-TIERCES.md). Leur code source est publié avec chaque version de l'APK.
+
+## Interface IA locale sur Ubuntu
+
+Avec Python 3.10+ et Ollama déjà démarré, lance depuis la racine du dépôt :
+
+```bash
+python3 interface-ia-local/app.py
+```
+
+Le navigateur ouvre [Marceau IA locale](http://127.0.0.1:8766). Choisis un modèle
+installé dans Ollama et envoie ton message. La conversation reste dans l’onglet
+ouvert et le modèle répond en direct.
+
+Active **Recherche Web** dans le chat pour transmettre les 350 premiers
+caractères de ton message au moteur de recherche. Marceau donne les extraits
+des résultats au modèle et affiche les liens. Si le moteur est indisponible,
+Marceau l’indique et Ollama répond avec ses connaissances. DuckDuckGo Lite est
+utilisé par défaut. Pour utiliser l’API JSON d’une instance SearXNG existante :
+
+```bash
+SEARXNG_URL=http://127.0.0.1:8080 python3 interface-ia-local/app.py
+```
+
+Pour Ollama sur un port personnalisé, définis par exemple
+`OLLAMA_URL=http://127.0.0.1:11435`. Utilise `--port` pour changer le port
+de Marceau et `--no-browser` pour ouvrir la page manuellement.

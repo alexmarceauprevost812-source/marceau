@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr-CA">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marceau · IA locale</title>
+<style>
+  :root { color-scheme: dark; font: 16px/1.55 "Inter", system-ui, sans-serif; background: #090909; color: #fff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  header { border-bottom: 1px solid #2a2420; background: #0e0e0e; }
+  .bar, main { width: min(100% - 2rem, 900px); margin: auto; }
+  .bar { display: flex; gap: .8rem; align-items: center; padding: 1rem 0; flex-wrap: wrap; }
+  .brand { font-weight: 800; letter-spacing: .12em; margin-right: auto; }
+  .brand span { color: #ff850a; }
+  main { padding: 1.5rem 0; }
+  h1 { font-size: clamp(2rem, 6vw, 3.2rem); letter-spacing: -.045em; margin: 0; }
+  #status { margin: .25rem 0 1rem; color: #d3d3d3; min-height: 1.6em; }
+  #chat { min-height: 40vh; display: grid; align-content: start; gap: 1rem; }
+  article { background: #161616; border: 1px solid #303030; border-radius: .85rem; padding: .8rem 1rem; overflow-wrap: anywhere; }
+  article.user { background: #21160e; border-color: #523015; margin-left: clamp(0px, 8vw, 5rem); }
+  article p { white-space: pre-wrap; margin: .35rem 0; }
+  article strong, a { color: #ffac5e; }
+  form { position: sticky; bottom: 0; background: #090909; padding: 1rem 0; }
+  textarea, select { background: #151515; color: #fff; border: 1px solid #555; border-radius: .6rem; padding: .6rem; font: inherit; }
+  select { max-width: min(20rem, 65vw); }
+  textarea { width: 100%; min-height: 5rem; resize: vertical; }
+  .actions { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+  button { background: #ff850a; color: #140900; border: 0; border-radius: .6rem; padding: .55rem .85rem; font: inherit; font-weight: 750; cursor: pointer; }
+  button:hover { background: #ffa348; }
+  button:disabled { opacity: .55; cursor: default; }
+  :focus-visible { outline: 2px solid #ffa348; outline-offset: 3px; }
+  input { accent-color: #ff850a; }
+  .sources { margin: .7rem 0 0; padding-left: 1.4rem; }
+</style>
+<header>
+  <div class="bar">
+    <div class="brand"><span>MARCEAU</span> / OLLAMA</div>
+    <select id="model" aria-label="Modèle Ollama"></select>
+    <button id="refresh" type="button">Actualiser</button>
+  </div>
+</header>
+<main>
+  <h1>Interface IA locale</h1>
+  <p id="status" role="status">Connexion à Ollama…</p>
+  <section id="chat" aria-label="Conversation"></section>
+  <form id="composer">
+    <textarea id="prompt" aria-label="Message" placeholder="Écris ton message…" required maxlength="16000"></textarea>
+    <div class="actions">
+      <label><input id="web" type="checkbox"> Recherche Web <span id="provider"></span></label>
+      <div>
+        <button id="clear" type="button">Nouveau chat</button>
+        <button id="send" type="submit" disabled>Envoyer</button>
+      </div>
+    </div>
+  </form>
+</main>
+<script>
+  const byId = id => document.getElementById(id);
+  const model = byId('model');
+  const chat = byId('chat');
+  const prompt = byId('prompt');
+  const status = byId('status');
+  const send = byId('send');
+  const refresh = byId('refresh');
+  const clear = byId('clear');
+  const web = byId('web');
+  let history = [];
+
+  async function models() {
+    refresh.disabled = true;
+    send.disabled = true;
+    status.textContent = 'Connexion à Ollama…';
+    try {
+      const response = await fetch('/api/models');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      const previous = model.value;
+      model.replaceChildren(...data.models.map(name => new Option(name, name)));
+      if (data.models.includes(previous)) model.value = previous;
+      status.textContent = data.models.length ? 'Ollama connecté' : 'Aucun modèle local trouvé dans Ollama.';
+      byId('provider').textContent = '(' + data.searchProvider + ')';
+    } catch (error) {
+      model.replaceChildren();
+      status.textContent = error.message;
+    } finally {
+      refresh.disabled = false;
+      send.disabled = !model.value;
+    }
+  }
+
+  function message(role, text) {
+    const article = document.createElement('article');
+    article.className = role;
+    const label = document.createElement('strong');
+    label.textContent = role === 'user' ? 'Toi' : model.value;
+    const body = document.createElement('p');
+    body.textContent = text;
+    article.append(label, body);
+    chat.append(article);
+    return body;
+  }
+
+  function addSources(body, sources) {
+    if (!sources.length) return;
+    const list = document.createElement('ol');
+    list.className = 'sources';
+    for (const source of sources) {
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = source.url;
+      link.textContent = source.title;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      item.append(link);
+      list.append(item);
+    }
+    body.after(list);
+  }
+
+  byId('composer').addEventListener('submit', async event => {
+    event.preventDefault();
+    const question = prompt.value.trim();
+    if (!question || send.disabled) return;
+    const lastTurn = { role: 'user', content: question };
+    const messages = [...history.slice(-12), lastTurn];
+    send.disabled = refresh.disabled = clear.disabled = model.disabled = true;
+    status.textContent = web.checked ? 'Recherche Web en cours…' : 'Ollama prépare la réponse…';
+    message('user', question);
+    const answer = message('assistant', '');
+    prompt.value = '';
+    let notice = '';
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Marceau': 'chat'},
+        body: JSON.stringify({model: model.value, messages, web: web.checked})
+      });
+      if (!response.ok) throw new Error((await response.json()).error);
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let pending = '';
+      let done = false;
+      try {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          pending += chunk.value;
+          const lines = pending.split('\n');
+          pending = lines.pop();
+          for (const line of lines) {
+            const item = JSON.parse(line);
+            if (item.error) throw new Error(item.error);
+            if (item.sources) {
+              notice = item.notice;
+              addSources(answer, item.sources);
+              status.textContent = notice || 'Ollama répond…';
+            }
+            if (item.text) answer.append(item.text);
+            if (item.done) done = true;
+          }
+        }
+      } finally {
+        await reader.cancel().catch(() => {});
+        reader.releaseLock();
+      }
+      if (!done || !answer.textContent.trim()) throw new Error('Réponse incomplète ou vide.');
+      history = [...messages, {role: 'assistant', content: answer.textContent.slice(0, 16000)}];
+      status.textContent = notice || 'Ollama connecté';
+    } catch (error) {
+      if (!answer.textContent) answer.textContent = error.message;
+      prompt.value ||= question;
+      status.textContent = error.message;
+    } finally {
+      send.disabled = refresh.disabled = clear.disabled = model.disabled = false;
+      prompt.focus();
+    }
+  });
+
+  clear.addEventListener('click', () => {
+    history = [];
+    chat.replaceChildren();
+    status.textContent = model.value ? 'Ollama connecté' : status.textContent;
+    prompt.focus();
+  });
+  refresh.addEventListener('click', models);
+  models();
+</script>
+</html>
