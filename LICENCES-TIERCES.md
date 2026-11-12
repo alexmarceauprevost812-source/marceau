@@ -4,7 +4,7 @@ Marceau est distribué sous licence **MIT** (voir [LICENSE](LICENSE)).
 L'APK contient aussi les logiciels libres suivants. La liste complète, avec les textes des licences,
 est aussi dans l'appli : **Bureau → Licences**.
 
-## Composants natifs (Terminal)
+## Composants natifs (Terminal et IA sur le téléphone)
 
 | Composant | Version | Licence | Texte | Source |
 | --- | --- | --- | --- | --- |
@@ -15,6 +15,7 @@ est aussi dans l'appli : **Bureau → Licences**.
 | Bouncy Castle | 1.78.1 | MIT | [licences/bouncycastle.txt](licences/bouncycastle.txt) | https://www.bouncycastle.org |
 | xterm.js + addon-fit | voir package.json | MIT | [licences/xterm.txt](licences/xterm.txt) | https://github.com/xtermjs/xterm.js |
 | XZ for Java | 1.9 | Domaine public | [licences/xz-java.txt](licences/xz-java.txt) | https://tukaani.org/xz/java.html |
+| llama.cpp + llama.rn | llama.rn 0.12.9 | MIT | [licences/llama-cpp.txt](licences/llama-cpp.txt) | https://github.com/mybigday/llama.rn |
 
 PRoot, talloc et libandroid-shmem sont **compilés à partir de leur code source**, sans modification, par
 [scripts/construire-linux.sh](scripts/construire-linux.sh). Leur code source exact est publié avec chaque
@@ -29,3 +30,7 @@ installation quand Kali en publie une pour ce fichier.
 React Native, Expo et leurs dépendances (environ 490 paquets) : licences libres (surtout MIT, ISC,
 Apache-2.0, BSD). La liste exacte est générée à chaque build par [scripts/licences.js](scripts/licences.js)
 et affichée dans l'appli.
+
+Les modèles d'IA au format .gguf ne sont **pas inclus dans l'APK** : ils se téléchargent à part dans l'appli
+(catalogue Ollama, Hugging Face ou un lien au choix) ou s'ajoutent depuis un fichier. Chaque modèle garde sa propre
+licence, à lire avant de l'utiliser ou de le partager.

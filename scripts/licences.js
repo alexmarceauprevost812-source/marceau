@@ -79,6 +79,15 @@ const NATIFS = [
     textes: ['licences/xterm.txt'],
   },
   {
+    nom: 'llama.cpp + llama.rn',
+    version: `llama.rn ${versionNpm('llama.rn')}`,
+    licence: 'MIT',
+    role: 'IA sur le téléphone : charge et fait tourner les modèles .gguf (Réglages → IA → Modèle sur le téléphone)',
+    auteurs: 'The ggml authors (llama.cpp), Jhen-Jie Hong (llama.rn)',
+    source: 'https://github.com/mybigday/llama.rn',
+    textes: ['licences/llama-cpp.txt'],
+  },
+  {
     nom: 'XZ for Java',
     version: '1.9',
     licence: 'Domaine public',

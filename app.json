@@ -29,7 +29,8 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "USE_EXACT_ALARM",
-        "SCHEDULE_EXACT_ALARM"
+        "SCHEDULE_EXACT_ALARM",
+        "MANAGE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -78,6 +79,7 @@
           "cameraPermission": "Marceau utilise l'appareil photo pour montrer une photo à l'IA."
         }
       ],
+      "llama.rn",
       "./modules/marceau-terminal/app.plugin.js"
     ],
     "extra": {

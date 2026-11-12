@@ -1,6 +1,8 @@
 import { fetch as fetchExpo } from 'expo/fetch';
 
 import { FOURNISSEURS, type Connexion, type FormatAPI } from './fournisseurs';
+import { listerModelesLocaux } from './gguf';
+import { discuterLocal, type MessageLocal } from './llamaLocal';
 import { lireBase64, type PieceJointe } from './pieces';
 
 export type Role = 'user' | 'assistant';
@@ -140,8 +142,31 @@ export async function versAPI(messages: MessageIA[], format: FormatAPI): Promise
   return resultat;
 }
 
+/** Modèle .gguf sur le téléphone : pas de serveur ni d'API, llama.cpp répond directement. */
+async function discuterGguf(c: Connexion, o: OptionsDiscussion): Promise<string> {
+  const dernier = o.messages[o.messages.length - 1];
+  if (dernier?.pieces?.some((p) => p.type === 'image' || p.type === 'pdf')) {
+    throw new Error(
+      'Les modèles .gguf sur le téléphone ne lisent pas encore les images ni les PDF. Joins plutôt un fichier texte ou du code, ou choisis une autre IA.',
+    );
+  }
+  const messages: MessageLocal[] = [
+    ...(o.systeme ? [{ role: 'system' as const, content: o.systeme }] : []),
+    ...o.messages
+      .map((m) => ({ role: m.role, content: texteAvecFichiers(m) }))
+      .filter((m) => m.content.trim()),
+  ];
+  return discuterLocal(c.modele.trim(), {
+    messages,
+    onMorceau: o.onMorceau,
+    signal: o.signal,
+    maxTokens: o.maxTokens,
+  });
+}
+
 /** Envoie une conversation à l'IA et renvoie la réponse complète (en direct si onMorceau est fourni). */
 export async function discuter(c: Connexion, o: OptionsDiscussion): Promise<string> {
+  if (c.fournisseur === 'gguf') return discuterGguf(c, o);
   const format = FOURNISSEURS[c.fournisseur].format;
   const enDirect = !!o.onMorceau;
   const messages = await versAPI(o.messages, format);
@@ -280,6 +305,7 @@ function texteDeReponse(brut: string, format: FormatAPI): string {
 
 /** Liste les modèles proposés par le serveur. */
 export async function listerModeles(c: Connexion): Promise<string[]> {
+  if (c.fournisseur === 'gguf') return listerModelesLocaux().map((m) => m.nom);
   let reponse: Awaited<ReturnType<typeof fetchExpo>>;
   try {
     reponse = await fetchExpo(`${base(c)}/models?limit=100`, { headers: entetes(c) });
@@ -314,7 +340,8 @@ const CONSIGNE_TACHES =
 /** Demande à l'IA de découper un objectif en tâches. */
 export async function proposerTaches(c: Connexion, objectif: string): Promise<string[]> {
   const controleur = new AbortController();
-  const minuterie = setTimeout(() => controleur.abort(), 60_000);
+  // Un modèle sur le téléphone est beaucoup plus lent qu'un serveur d'IA.
+  const minuterie = setTimeout(() => controleur.abort(), c.fournisseur === 'gguf' ? 240_000 : 60_000);
   let texte: string;
   try {
     texte = await discuter(c, {

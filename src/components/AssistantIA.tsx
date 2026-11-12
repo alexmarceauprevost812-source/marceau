@@ -124,7 +124,9 @@ export function AssistantIA({ visible, couleurs: c, onFermer, onAjouter }: Props
 
               {manqueCle && (
                 <Text style={[styles.message, { color: c.danger }]}>
-                  Ajoute une clé API dans Réglages (ou choisis Ollama).
+                  {connexion.fournisseur === 'gguf'
+                    ? 'Choisis un modèle .gguf dans Réglages.'
+                    : 'Ajoute une clé API dans Réglages (ou choisis Ollama).'}
                 </Text>
               )}
               {!!erreur && <Text style={[styles.message, { color: c.danger }]}>{erreur}</Text>}

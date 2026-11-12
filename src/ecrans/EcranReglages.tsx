@@ -19,6 +19,8 @@ import { utilisateurGithub } from '../ia/github';
 import { connexionDirectePossible } from '../ia/connexionGithub';
 import { ConnexionGithub } from './ConnexionGithub';
 import { FOURNISSEURS, ORDRE_FOURNISSEURS, type Espace, type IdFournisseur, type ReglagesIA } from '../ia/fournisseurs';
+import { ggufDisponible } from '../ia/gguf';
+import { ModelesLocaux } from './ModelesLocaux';
 import { useReglagesIA } from '../ia/ReglagesContexte';
 import type { Couleurs } from '../theme';
 
@@ -135,10 +137,11 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
             <Text style={[styles.etiquette, { color: c.texteDoux }]}>
               IA UTILISÉE {espace === 'codex' ? 'PAR LE CODEX' : 'PAR LE CHAT'}
             </Text>
-            {ORDRE_FOURNISSEURS.map((cle) => {
+            {ORDRE_FOURNISSEURS.filter((cle) => cle !== 'gguf' || ggufDisponible()).map((cle) => {
               const four = FOURNISSEURS[cle];
               const actif = cle === id;
-              const pret = !four.besoinCle || !!brouillon.configs[cle].cle.trim();
+              const pret =
+                cle === 'gguf' ? !!brouillon.configs.gguf.modele.trim() : !four.besoinCle || !!brouillon.configs[cle].cle.trim();
               return (
                 <Pressable
                   key={cle}
@@ -157,7 +160,7 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
                   <View style={styles.flex}>
                     <Text style={[styles.nomOption, { color: c.texte }]}>{four.nom}</Text>
                     <Text style={{ color: c.texteDoux, fontSize: 13 }}>
-                      {four.gratuit ? 'Gratuit' : 'Ta clé API'} · {pret ? 'prêt' : 'clé à ajouter'}
+                      {four.gratuit ? 'Gratuit' : 'Ta clé API'} · {pret ? 'prêt' : cle === 'gguf' ? 'modèle à ajouter' : 'clé à ajouter'}
                     </Text>
                   </View>
                   {four.gratuit && (
@@ -215,49 +218,55 @@ export function EcranReglages({ visible, couleurs: c, onFermer, espaceInitial = 
               </>
             )}
 
-            <Text style={[styles.etiquette, { color: c.texteDoux }]}>MODÈLE</Text>
-            <TextInput
-              value={config.modele}
-              onChangeText={(v) => changer('modele', v)}
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={champ}
-              accessibilityLabel="Modèle"
-            />
-            <View style={styles.puces}>
-              {listeModeles.map((m) => {
-                const actif = m === config.modele;
-                return (
-                  <Pressable
-                    key={m}
-                    onPress={() => changer('modele', m)}
-                    style={[
-                      styles.puce,
-                      { borderColor: actif ? c.accent : c.bordure },
-                      actif && { backgroundColor: c.accent },
-                    ]}
-                  >
-                    <Text style={{ color: actif ? c.surAccent : c.texte, fontSize: 13 }}>{m}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Pressable onPress={charger} disabled={chargement} accessibilityRole="button" style={styles.ligneLien}>
-              {chargement && <ActivityIndicator color={c.accentTexte} />}
-              <Text style={[styles.lien, { color: c.accentTexte }]}>Charger la liste des modèles du serveur</Text>
-            </Pressable>
-            {!!message && <Text style={{ color: c.danger, fontSize: 14 }}>{message}</Text>}
+            {id === 'gguf' ? (
+              <ModelesLocaux couleurs={c} modeleChoisi={config.modele} onChoisir={(nom) => changer('modele', nom)} />
+            ) : (
+              <>
+                <Text style={[styles.etiquette, { color: c.texteDoux }]}>MODÈLE</Text>
+                <TextInput
+                  value={config.modele}
+                  onChangeText={(v) => changer('modele', v)}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={champ}
+                  accessibilityLabel="Modèle"
+                />
+                <View style={styles.puces}>
+                  {listeModeles.map((m) => {
+                    const actif = m === config.modele;
+                    return (
+                      <Pressable
+                        key={m}
+                        onPress={() => changer('modele', m)}
+                        style={[
+                          styles.puce,
+                          { borderColor: actif ? c.accent : c.bordure },
+                          actif && { backgroundColor: c.accent },
+                        ]}
+                      >
+                        <Text style={{ color: actif ? c.surAccent : c.texte, fontSize: 13 }}>{m}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Pressable onPress={charger} disabled={chargement} accessibilityRole="button" style={styles.ligneLien}>
+                  {chargement && <ActivityIndicator color={c.accentTexte} />}
+                  <Text style={[styles.lien, { color: c.accentTexte }]}>Charger la liste des modèles du serveur</Text>
+                </Pressable>
+                {!!message && <Text style={{ color: c.danger, fontSize: 14 }}>{message}</Text>}
 
-            <Text style={[styles.etiquette, { color: c.texteDoux }]}>ADRESSE DU SERVEUR</Text>
-            <TextInput
-              value={config.url}
-              onChangeText={(v) => changer('url', v)}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={champ}
-              accessibilityLabel="Adresse du serveur"
-            />
+                <Text style={[styles.etiquette, { color: c.texteDoux }]}>ADRESSE DU SERVEUR</Text>
+                <TextInput
+                  value={config.url}
+                  onChangeText={(v) => changer('url', v)}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  style={champ}
+                  accessibilityLabel="Adresse du serveur"
+                />
+              </>
+            )}
 
             {espace === 'codex' && (
               <>

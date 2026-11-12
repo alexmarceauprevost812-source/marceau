@@ -314,7 +314,9 @@ export function Discussion({
         {cleManquante && (
           <Pressable onPress={() => ouvrirReglages(espace)}>
             <Text style={[styles.avertissement, { color: c.danger }]}>
-              Ajoute ta clé {fournisseur.nom} dans les réglages pour commencer →
+              {connexion.fournisseur === 'gguf'
+                ? 'Choisis un modèle .gguf dans les réglages pour commencer →'
+                : `Ajoute ta clé ${fournisseur.nom} dans les réglages pour commencer →`}
             </Text>
           </Pressable>
         )}

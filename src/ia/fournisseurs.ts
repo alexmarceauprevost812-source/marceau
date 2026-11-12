@@ -15,7 +15,7 @@ import { Platform } from 'react-native';
 
 const web = Platform.OS === 'web';
 
-export type IdFournisseur = 'opencode' | 'ollama' | 'anthropic' | 'openai';
+export type IdFournisseur = 'opencode' | 'ollama' | 'gguf' | 'anthropic' | 'openai';
 
 /** Format de l'API : OpenAI (/chat/completions) ou Anthropic (/messages). */
 export type FormatAPI = 'openai' | 'anthropic';
@@ -70,6 +70,19 @@ export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
     modelesSuggeres: ['llama3.2', 'qwen3', 'qwen2.5-coder', 'gemma3'],
     besoinCle: false,
   },
+  gguf: {
+    id: 'gguf',
+    nom: 'Modèle sur le téléphone (.gguf)',
+    gratuit: true,
+    format: 'openai',
+    description:
+      "L'IA tourne directement sur ton téléphone, sans internet ni serveur. Télécharge un modèle en un clic (liens Ollama ou Hugging Face) ou ajoute ton propre fichier .gguf. Le modèle n'est pas dans l'APK : il se télécharge à part, une seule fois. Marche seulement dans l'APK Android.",
+    // Pas d'adresse : le modèle est un fichier .gguf rangé sur le téléphone.
+    urlParDefaut: '',
+    modeleParDefaut: '',
+    modelesSuggeres: [],
+    besoinCle: false,
+  },
   anthropic: {
     id: 'anthropic',
     nom: 'Claude (Anthropic)',
@@ -112,7 +125,7 @@ export const FOURNISSEURS: Record<IdFournisseur, Fournisseur> = {
   },
 };
 
-export const ORDRE_FOURNISSEURS: IdFournisseur[] = ['opencode', 'ollama', 'anthropic', 'openai'];
+export const ORDRE_FOURNISSEURS: IdFournisseur[] = ['opencode', 'ollama', 'gguf', 'anthropic', 'openai'];
 
 /** Réglages d'un fournisseur. */
 export type ConfigFournisseur = { url: string; modele: string; cle: string };
@@ -147,6 +160,7 @@ export function reglagesParDefaut(): ReglagesIA {
     configs: {
       opencode: configParDefaut('opencode'),
       ollama: configParDefaut('ollama'),
+      gguf: configParDefaut('gguf'),
       anthropic: configParDefaut('anthropic'),
       openai: configParDefaut('openai'),
     },
@@ -158,6 +172,8 @@ export function connexionActive(r: ReglagesIA, espace: Espace = 'chat'): Connexi
   return { fournisseur: id, ...r.configs[id] };
 }
 
+/** Il manque la clé API — ou, pour un modèle .gguf sur le téléphone, le modèle à utiliser. */
 export function manqueCle(c: Connexion): boolean {
+  if (c.fournisseur === 'gguf') return !c.modele.trim();
   return FOURNISSEURS[c.fournisseur].besoinCle && !c.cle.trim();
 }
